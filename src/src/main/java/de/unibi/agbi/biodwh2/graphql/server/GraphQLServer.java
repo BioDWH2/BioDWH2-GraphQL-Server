@@ -14,6 +14,7 @@ import graphql.schema.idl.SchemaGenerator;
 import graphql.schema.idl.SchemaParser;
 import graphql.schema.idl.TypeDefinitionRegistry;
 import io.javalin.Javalin;
+import io.javalin.core.JavalinConfig;
 import io.javalin.http.Context;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
@@ -56,32 +57,35 @@ public class GraphQLServer {
 
     private void startWorkspaceServer(final CmdArgs commandLine) {
         final String workspacePath = commandLine.start;
+        final int port = commandLine.port != null ? commandLine.port : 7474;
         if (StringUtils.isEmpty(workspacePath) || !Paths.get(workspacePath).toFile().exists()) {
             LOGGER.error("Workspace path '" + workspacePath + "' was not found");
             printHelp(commandLine);
             return;
         }
         LOGGER.info("Load database...");
-        final Graph graph = new Graph(Paths.get(workspacePath, "mapped.db").toString(), true);
+        final Graph graph = new Graph(Paths.get(workspacePath, "sources", "mapped.db").toString(), true);
         LOGGER.info("Setup GraphQL...");
         SchemaParser schemaParser = new SchemaParser();
-        File schemaFile = Paths.get(workspacePath, "mapped.graphqls").toFile();
+        File schemaFile = Paths.get(workspacePath, "sources", "mapped.graphqls").toFile();
         TypeDefinitionRegistry typeRegistry = schemaParser.parse(schemaFile);
         SchemaGenerator schemaGenerator = new SchemaGenerator();
         RuntimeWiring wiring = buildRuntimeWiring(graph);
         GraphQLSchema schema = schemaGenerator.makeExecutableSchema(typeRegistry, wiring);
         graphQL = GraphQL.newGraphQL(schema).build();
         LOGGER.info("Start server...");
-        Javalin app = Javalin.create(config -> {
-            config.defaultContentType = "application/json";
-            config.enableCorsForAllOrigins();
-        }).start(8084);
+        Javalin app = Javalin.create(this::configureJavalin).start(port);
         app.post("/", GraphQLServer::handleRootPost);
     }
 
     private static RuntimeWiring buildRuntimeWiring(final Graph graph) {
         return RuntimeWiring.newRuntimeWiring().type("QueryType", typeWiring -> typeWiring
                 .defaultDataFetcher(new GraphDataFetcher(graph))).build();
+    }
+
+    private void configureJavalin(final JavalinConfig config) {
+        config.defaultContentType = "application/json";
+        config.enableCorsForAllOrigins();
     }
 
     private static void handleRootPost(Context ctx) throws IOException {

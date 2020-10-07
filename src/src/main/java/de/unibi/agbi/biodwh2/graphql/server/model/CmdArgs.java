@@ -9,4 +9,8 @@ public class CmdArgs {
             "-s", "--start"
     }, arity = "1", paramLabel = "<workspacePath>", description = "Start a GraphQL server for the workspace")
     public String start;
+    @CommandLine.Option(names = {
+            "-p", "--port"
+    }, defaultValue = "7474", paramLabel = "<port>", description = "Specifies the GraphQL port (default 7474)")
+    public Integer port;
 }
