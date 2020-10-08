@@ -2,6 +2,7 @@ package de.unibi.agbi.biodwh2.graphql.server.model;
 
 import picocli.CommandLine;
 
+@CommandLine.Command(name = "BioDWH2-GraphQL-Server.jar")
 public class CmdArgs {
     @CommandLine.Option(names = {"-h", "--help"}, usageHelp = true, description = "print this message")
     public boolean help;
