@@ -21,8 +21,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import picocli.CommandLine;
 
+import java.awt.*;
 import java.io.File;
 import java.io.IOException;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.stream.Collectors;
@@ -76,6 +79,7 @@ public class GraphQLServer {
         LOGGER.info("Start server...");
         Javalin app = Javalin.create(this::configureJavalin).start(port);
         app.post("/", GraphQLServer::handleRootPost);
+        openBrowser(port);
     }
 
     private static RuntimeWiring buildRuntimeWiring(final Graph graph) {
@@ -86,6 +90,7 @@ public class GraphQLServer {
     private void configureJavalin(final JavalinConfig config) {
         config.defaultContentType = "application/json";
         config.enableCorsForAllOrigins();
+        config.showJavalinBanner = false;
     }
 
     private static void handleRootPost(Context ctx) throws IOException {
@@ -96,6 +101,18 @@ public class GraphQLServer {
         ExecutionResult executionResult = graphQL.execute(executionInput);
         ObjectMapper objectMapper = new ObjectMapper();
         ctx.result(objectMapper.writeValueAsString(executionResult.toSpecification()));
+    }
+
+    private void openBrowser(final int port) {
+        if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {
+            try {
+                Desktop.getDesktop().browse(
+                        new URI("https://biodwh2.github.io/graphql/?endpoint=http://localhost:" + port + "/"));
+            } catch (IOException | URISyntaxException e) {
+                if (LOGGER.isErrorEnabled())
+                    LOGGER.error("Failed to open Browser", e);
+            }
+        }
     }
 
     private void printHelp(final CmdArgs commandLine) {
