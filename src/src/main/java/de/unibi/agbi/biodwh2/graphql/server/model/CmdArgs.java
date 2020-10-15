@@ -12,6 +12,6 @@ public class CmdArgs {
     public String start;
     @CommandLine.Option(names = {
             "-p", "--port"
-    }, defaultValue = "7474", paramLabel = "<port>", description = "Specifies the GraphQL port (default 7474)")
+    }, defaultValue = "8090", paramLabel = "<port>", description = "Specifies the GraphQL server port (default 8090)")
     public Integer port;
 }

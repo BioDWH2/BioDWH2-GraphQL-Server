@@ -57,7 +57,7 @@ public class GraphQLServer {
 
     private void startWorkspaceServer(final CmdArgs commandLine) {
         final String workspacePath = commandLine.start;
-        final int port = commandLine.port != null ? commandLine.port : 7474;
+        final int port = commandLine.port != null ? commandLine.port : 8090;
         if (StringUtils.isEmpty(workspacePath) || !Paths.get(workspacePath).toFile().exists()) {
             LOGGER.error("Workspace path '" + workspacePath + "' was not found");
             printHelp(commandLine);
