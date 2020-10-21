@@ -43,6 +43,7 @@ public class GraphSchema {
             nodeTypes.put(type.label, type);
         }
         final Map<String, Class<?>> propertyKeyTypes = node.getPropertyKeyTypes();
+        propertyKeyTypes.put("__id", Long.TYPE);
         for (final String propertyKey : propertyKeyTypes.keySet())
             if (!"_modified".equalsIgnoreCase(propertyKey) && !"_revision".equalsIgnoreCase(propertyKey))
                 type.propertyKeyTypes.put(propertyKey, propertyKeyTypes.get(propertyKey));
@@ -61,6 +62,7 @@ public class GraphSchema {
             edgeTypes.put(type.label, type);
         }
         final Map<String, Class<?>> propertyKeyTypes = edge.getPropertyKeyTypes();
+        propertyKeyTypes.put("__id", Long.TYPE);
         for (final String propertyKey : propertyKeyTypes.keySet())
             if (!"_modified".equalsIgnoreCase(propertyKey) && !"_revision".equalsIgnoreCase(propertyKey))
                 type.propertyKeyTypes.put(propertyKey, propertyKeyTypes.get(propertyKey));

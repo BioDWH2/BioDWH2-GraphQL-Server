@@ -18,6 +18,10 @@ class GraphDataFetcher implements DataFetcher {
 
     @Override
     public Object get(DataFetchingEnvironment dataFetchingEnvironment) {
+        if (dataFetchingEnvironment.getSource() != null) {
+            final Node node = dataFetchingEnvironment.getSource();
+            return node.getProperty(dataFetchingEnvironment.getFieldDefinition().getName());
+        }
         Map<String, Object> arguments = dataFetchingEnvironment.getArguments();
         final String label = dataFetchingEnvironment.getMergedField().getName();
         List<Node> result = new ArrayList<>();

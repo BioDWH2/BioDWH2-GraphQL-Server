@@ -24,6 +24,7 @@ public final class GraphQLSchemaWriter extends SchemaWriter {
 
     private void save(final BufferedWriter writer) throws IOException {
         writeMainSchema(writer);
+        writeInterfaces(writer);
         writeQueryType(writer);
         for (final GraphSchema.NodeType type : schema.getNodeTypes())
             writeNodeType(writer, type);
@@ -40,6 +41,12 @@ public final class GraphQLSchemaWriter extends SchemaWriter {
     private void writeLine(final BufferedWriter writer, final String line) throws IOException {
         writer.write(line);
         writer.newLine();
+    }
+
+    private void writeInterfaces(final BufferedWriter writer) throws IOException {
+        writeLine(writer, "interface Node {");
+        writeLine(writer, "  id: ID!");
+        writeLine(writer, "}");
     }
 
     private void writeQueryType(final BufferedWriter writer) throws IOException {
@@ -75,7 +82,7 @@ public final class GraphQLSchemaWriter extends SchemaWriter {
     }
 
     private void writeNodeType(final BufferedWriter writer, final GraphSchema.NodeType type) throws IOException {
-        writeLine(writer, "type " + type.label + " {");
+        writeLine(writer, "type " + type.label + " implements Node {");
         writeTypeProperties(writer, type);
         writeLine(writer, "}");
     }
