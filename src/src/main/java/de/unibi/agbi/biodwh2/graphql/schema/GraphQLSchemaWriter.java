@@ -45,31 +45,38 @@ public final class GraphQLSchemaWriter extends SchemaWriter {
 
     private void writeInterfaces(final BufferedWriter writer) throws IOException {
         writeLine(writer, "interface Node {");
-        writeLine(writer, "  id: ID!");
+        writeLine(writer, "  __id: ID!");
+        writeLine(writer, "}");
+        writeLine(writer, "interface Edge {");
+        writeLine(writer, "  __id: ID!");
         writeLine(writer, "}");
     }
 
     private void writeQueryType(final BufferedWriter writer) throws IOException {
         writeLine(writer, "type QueryType {");
         writeQueryTypeNodeEndpoints(writer);
+        writeQueryTypeEdgeEndpoints(writer);
         writeLine(writer, "}");
     }
 
     private void writeQueryTypeNodeEndpoints(final BufferedWriter writer) throws IOException {
         for (final GraphSchema.NodeType nodeType : schema.getNodeTypes()) {
             final String arguments = nodeType.propertyKeyTypes.keySet().stream().map(
-                    key -> mapPropertyToKeyTypeDefinition(nodeType, key)).collect(Collectors.joining(", "));
+                    key -> mapPropertyToKeyTypeDefinition(nodeType, key).replace("!", "")).collect(
+                    Collectors.joining(", "));
             writeLine(writer, "  " + nodeType.label + "(" + arguments + "): [" + nodeType.label + "]!");
         }
     }
 
     private String mapPropertyToKeyTypeDefinition(final GraphSchema.Type type, final String key) {
-        return key + ": " + getGraphQLTypeName(type.propertyKeyTypes.get(key));
+        return key + ": " + getGraphQLTypeName(key, type.propertyKeyTypes.get(key));
     }
 
-    private String getGraphQLTypeName(final Class<?> type) {
+    private String getGraphQLTypeName(final String key, final Class<?> type) {
         if (type.isArray())
-            return "[" + getGraphQLTypeName(type.getComponentType()) + "]";
+            return "[" + getGraphQLTypeName(key, type.getComponentType()) + "]";
+        if ("__id".equals(key))
+            return "ID!";
         if (type == String.class)
             return "String";
         if (type == Integer.class || type == int.class)
@@ -79,6 +86,28 @@ public final class GraphQLSchemaWriter extends SchemaWriter {
         if (type == Boolean.class || type == boolean.class)
             return "Boolean";
         return "String";
+    }
+
+    private void writeQueryTypeEdgeEndpoints(final BufferedWriter writer) throws IOException {
+        for (final GraphSchema.EdgeType type : schema.getEdgeTypes())
+            writeQueryTypeEdgeEndpoint(writer, type);
+    }
+
+    private void writeQueryTypeEdgeEndpoint(final BufferedWriter writer,
+                                            final GraphSchema.EdgeType type) throws IOException {
+        for (final String fromLabel : type.fromLabels) {
+            for (final String toLabel : type.toLabels) {
+                final String edgeTypeName = getEdgeTypeName(fromLabel, type.label, toLabel);
+                final String arguments = type.propertyKeyTypes.keySet().stream().map(
+                        key -> mapPropertyToKeyTypeDefinition(type, key).replace("!", "")).collect(
+                        Collectors.joining(", "));
+                writeLine(writer, "  " + edgeTypeName + "(" + arguments + "): [" + edgeTypeName + "]!");
+            }
+        }
+    }
+
+    private String getEdgeTypeName(final String fromLabel, final String label, final String toLabel) {
+        return fromLabel + "__" + label + "__" + toLabel + "__Edge";
     }
 
     private void writeNodeType(final BufferedWriter writer, final GraphSchema.NodeType type) throws IOException {
@@ -93,8 +122,14 @@ public final class GraphQLSchemaWriter extends SchemaWriter {
     }
 
     private void writeEdgeType(final BufferedWriter writer, final GraphSchema.EdgeType type) throws IOException {
-        writeLine(writer, "type rel_" + type.label + " {");
-        writeTypeProperties(writer, type);
-        writeLine(writer, "}");
+        for (final String fromLabel : type.fromLabels) {
+            for (final String toLabel : type.toLabels) {
+                writeLine(writer, "type " + getEdgeTypeName(fromLabel, type.label, toLabel) + " implements Edge {");
+                writeTypeProperties(writer, type);
+                writeLine(writer, "  __source: " + fromLabel + "!");
+                writeLine(writer, "  __target: " + toLabel + "!");
+                writeLine(writer, "}");
+            }
+        }
     }
 }
