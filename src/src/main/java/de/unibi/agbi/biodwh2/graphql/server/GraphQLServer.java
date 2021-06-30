@@ -1,20 +1,20 @@
 package de.unibi.agbi.biodwh2.graphql.server;
 
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import de.unibi.agbi.biodwh2.core.model.Version;
 import de.unibi.agbi.biodwh2.core.model.graph.Graph;
+import de.unibi.agbi.biodwh2.core.net.BioDWH2Updater;
 import de.unibi.agbi.biodwh2.graphql.schema.GraphQLSchemaWriter;
 import de.unibi.agbi.biodwh2.graphql.schema.GraphSchema;
 import de.unibi.agbi.biodwh2.graphql.server.model.CmdArgs;
-import de.unibi.agbi.biodwh2.graphql.server.model.GithubAsset;
-import de.unibi.agbi.biodwh2.graphql.server.model.GithubRelease;
 import de.unibi.agbi.biodwh2.graphql.server.model.RequestBody;
 import graphql.ExecutionInput;
 import graphql.ExecutionResult;
 import graphql.GraphQL;
 import graphql.schema.GraphQLSchema;
-import graphql.schema.idl.*;
+import graphql.schema.idl.RuntimeWiring;
+import graphql.schema.idl.SchemaGenerator;
+import graphql.schema.idl.SchemaParser;
+import graphql.schema.idl.TypeDefinitionRegistry;
 import io.javalin.Javalin;
 import io.javalin.core.JavalinConfig;
 import io.javalin.http.Context;
@@ -29,20 +29,14 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Arrays;
-import java.util.Enumeration;
-import java.util.List;
-import java.util.Optional;
-import java.util.jar.Manifest;
 import java.util.stream.Collectors;
 
 public class GraphQLServer {
     private static final Logger LOGGER = LoggerFactory.getLogger(GraphQLServer.class);
-    private static final String BIODWH2_GRAPHQL_RELEASE_URL = "https://api.github.com/repos/BioDWH2/BioDWH2-GraphQL-Server/releases";
     private static final String DATABASE_FILE_NAME = "mapped." + Graph.EXTENSION;
     private static final String SCHEMA_FILE_NAME = "mapped." + GraphQLSchemaWriter.EXTENSION;
 
@@ -64,7 +58,8 @@ public class GraphQLServer {
     }
 
     private void run(final CmdArgs commandLine) {
-        checkForUpdate();
+        BioDWH2Updater.checkForUpdate("BioDWH2-GraphQL-Server",
+                "https://api.github.com/repos/BioDWH2/BioDWH2-GraphQL-Server/releases");
         if (commandLine.start != null)
             startWorkspaceServer(commandLine);
         else
@@ -81,7 +76,7 @@ public class GraphQLServer {
         final int port = commandLine.port != null ? commandLine.port : 8090;
         LOGGER.info("Load database...");
         final String workspaceGraphHash = getWorkspaceGraphHash(workspacePath);
-        final Graph graph = new Graph(Paths.get(workspacePath, "sources", DATABASE_FILE_NAME).toString(), true);
+        final Graph graph = new Graph(Paths.get(workspacePath, "sources", DATABASE_FILE_NAME), true, true);
         updateSchemaIfNecessary(graphqlPath, graph, workspaceGraphHash);
         LOGGER.info("Setup GraphQL...");
         SchemaParser schemaParser = new SchemaParser();
@@ -186,56 +181,5 @@ public class GraphQLServer {
 
     private void printHelp(final CmdArgs commandLine) {
         CommandLine.usage(commandLine, System.out);
-    }
-
-    private void checkForUpdate() {
-        final Version currentVersion = getCurrentVersion();
-        Version mostRecentVersion = null;
-        String mostRecentDownloadUrl = null;
-        final ObjectMapper mapper = new ObjectMapper();
-        try {
-            final URL releaseUrl = new URL(BIODWH2_GRAPHQL_RELEASE_URL);
-            final java.util.List<GithubRelease> releases = mapper.readValue(releaseUrl,
-                                                                            new TypeReference<List<GithubRelease>>() {
-                                                                            });
-            for (final GithubRelease release : releases) {
-                final Version version = Version.tryParse(release.tagName.replace("v", ""));
-                if (version != null) {
-                    final String jarName = "BioDWH2-GraphQL-Server-" + release.tagName + ".jar";
-                    final Optional<GithubAsset> jarAsset = release.assets.stream().filter(
-                            asset -> asset.name.equalsIgnoreCase(jarName)).findFirst();
-                    if (jarAsset.isPresent() && mostRecentVersion == null || version.compareTo(mostRecentVersion) > 0) {
-                        mostRecentVersion = version;
-                        //noinspection OptionalGetWithoutIsPresent
-                        mostRecentDownloadUrl = jarAsset.get().browserDownloadUrl;
-                    }
-                }
-            }
-        } catch (IOException | ClassCastException ignored) {
-        }
-        if (currentVersion == null && mostRecentVersion != null || currentVersion != null && currentVersion.compareTo(
-                mostRecentVersion) < 0) {
-            LOGGER.info("=======================================");
-            LOGGER.info("New version " + mostRecentVersion + " of BioDWH2-GraphQL-Server is available at:");
-            LOGGER.info(mostRecentDownloadUrl);
-            LOGGER.info("=======================================");
-        }
-    }
-
-    private Version getCurrentVersion() {
-        try {
-            final Enumeration<URL> resources = getClass().getClassLoader().getResources("META-INF/MANIFEST.MF");
-            while (resources.hasMoreElements()) {
-                try {
-                    final Manifest manifest = new Manifest(resources.nextElement().openStream());
-                    final Version version = Version.tryParse(manifest.getMainAttributes().getValue("BioDWH2-version"));
-                    if (version != null)
-                        return version;
-                } catch (IOException ignored) {
-                }
-            }
-        } catch (IOException ignored) {
-        }
-        return null;
     }
 }

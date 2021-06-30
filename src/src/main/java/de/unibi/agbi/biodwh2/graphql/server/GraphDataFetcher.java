@@ -10,6 +10,7 @@ import graphql.schema.GraphQLType;
 import org.apache.commons.lang3.StringUtils;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -34,7 +35,7 @@ class GraphDataFetcher implements DataFetcher {
     }
 
     private Object getObject(final DataFetchingEnvironment environment, final GraphQLObjectType type) {
-        final Map<String, Object> arguments = environment.getArguments();
+        final Map<String, Comparable<?>> arguments = convertArgumentsForGraph(environment.getArguments());
         if (type.getInterfaces().stream().anyMatch(i -> i.getName().equals("Node"))) {
             final List<Node> result = new ArrayList<>();
             graph.findNodes(type.getName(), arguments).forEach(result::add);
@@ -42,12 +43,20 @@ class GraphDataFetcher implements DataFetcher {
         }
         if (type.getInterfaces().stream().anyMatch(i -> i.getName().equals("Edge"))) {
             final List<Edge> result = new ArrayList<>();
-            // TODO: all arguments
-            final String key = arguments.keySet().toArray(new String[0])[0];
             final String edgeLabel = StringUtils.splitByWholeSeparator(type.getName(), "__")[1];
-            graph.findEdges(edgeLabel, key, arguments.get(key)).forEach(result::add);
+            graph.findEdges(edgeLabel, arguments).forEach(result::add);
             return result;
         }
         return null;
+    }
+
+    private Map<String, Comparable<?>> convertArgumentsForGraph(final Map<String, Object> arguments) {
+        final Map<String, Comparable<?>> result = new HashMap<>();
+        for (final String key : arguments.keySet())
+            if ("_id".equals(key))
+                result.put('_' + key, (Comparable<?>) arguments.get(key));
+            else
+                result.put(key, (Comparable<?>) arguments.get(key));
+        return result;
     }
 }

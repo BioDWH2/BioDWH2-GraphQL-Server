@@ -1,5 +1,7 @@
 package de.unibi.agbi.biodwh2.graphql.schema;
 
+import de.unibi.agbi.biodwh2.core.lang.Type;
+
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -45,17 +47,17 @@ public final class GraphQLSchemaWriter extends SchemaWriter {
 
     private void writeInterfaces(final BufferedWriter writer) throws IOException {
         writeLine(writer, "interface Node {");
-        writeLine(writer, "  __id: ID!");
+        writeLine(writer, "  _id: ID!");
         writeLine(writer, "}");
         writeLine(writer, "interface Edge {");
-        writeLine(writer, "  __id: ID!");
+        writeLine(writer, "  _id: ID!");
         writeLine(writer, "}");
     }
 
     private void writeQueryType(final BufferedWriter writer) throws IOException {
         writeLine(writer, "type QueryType {");
         writeQueryTypeNodeEndpoints(writer);
-        writeQueryTypeEdgeEndpoints(writer);
+        //writeQueryTypeEdgeEndpoints(writer);
         writeLine(writer, "}");
     }
 
@@ -68,14 +70,18 @@ public final class GraphQLSchemaWriter extends SchemaWriter {
         }
     }
 
-    private String mapPropertyToKeyTypeDefinition(final GraphSchema.Type type, final String key) {
+    private String mapPropertyToKeyTypeDefinition(final GraphSchema.BaseType type, final String key) {
         return key + ": " + getGraphQLTypeName(key, type.propertyKeyTypes.get(key));
     }
 
-    private String getGraphQLTypeName(final String key, final Class<?> type) {
-        if (type.isArray())
+    private String getGraphQLTypeName(final String key, final Type type) {
+        if (type.isList())
             return "[" + getGraphQLTypeName(key, type.getComponentType()) + "]";
-        if ("__id".equals(key))
+        return getGraphQLTypeName(key, type.getType());
+    }
+
+    private String getGraphQLTypeName(final String key, final Class<?> type) {
+        if ("_id".equals(key))
             return "ID!";
         if (type == String.class)
             return "String";
@@ -116,7 +122,7 @@ public final class GraphQLSchemaWriter extends SchemaWriter {
         writeLine(writer, "}");
     }
 
-    private void writeTypeProperties(final BufferedWriter writer, final GraphSchema.Type type) throws IOException {
+    private void writeTypeProperties(final BufferedWriter writer, final GraphSchema.BaseType type) throws IOException {
         for (final String key : type.propertyKeyTypes.keySet())
             writeLine(writer, "  " + mapPropertyToKeyTypeDefinition(type, key));
     }
@@ -126,8 +132,8 @@ public final class GraphQLSchemaWriter extends SchemaWriter {
             for (final String toLabel : type.toLabels) {
                 writeLine(writer, "type " + getEdgeTypeName(fromLabel, type.label, toLabel) + " implements Edge {");
                 writeTypeProperties(writer, type);
-                writeLine(writer, "  __source: " + fromLabel + "!");
-                writeLine(writer, "  __target: " + toLabel + "!");
+                writeLine(writer, "  _source: " + fromLabel + "!");
+                writeLine(writer, "  _target: " + toLabel + "!");
                 writeLine(writer, "}");
             }
         }
