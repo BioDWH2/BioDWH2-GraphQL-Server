@@ -53,7 +53,7 @@ class GraphDataFetcher implements DataFetcher {
     private Map<String, Comparable<?>> convertArgumentsForGraph(final Map<String, Object> arguments) {
         final Map<String, Comparable<?>> result = new HashMap<>();
         for (final String key : arguments.keySet())
-            if ("_id".equals(key))
+            if ("_id".equals(key) || "_label".equals(key) || "_mapped".equals(key))
                 result.put('_' + key, (Comparable<?>) arguments.get(key));
             else
                 result.put(key, (Comparable<?>) arguments.get(key));

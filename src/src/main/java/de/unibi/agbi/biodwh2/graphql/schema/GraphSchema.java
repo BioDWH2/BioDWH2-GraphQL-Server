@@ -3,14 +3,14 @@ package de.unibi.agbi.biodwh2.graphql.schema;
 import de.unibi.agbi.biodwh2.core.lang.Type;
 import de.unibi.agbi.biodwh2.core.model.graph.Edge;
 import de.unibi.agbi.biodwh2.core.model.graph.Graph;
-import de.unibi.agbi.biodwh2.core.model.graph.Node;
+import org.apache.commons.lang3.StringUtils;
 
 import java.util.*;
 
 public class GraphSchema {
     public static class BaseType {
         String label;
-        Map<String, Type> propertyKeyTypes;
+        Map<String, Type> propertyKeyTypes = new HashMap<>();
     }
 
     public static class NodeType extends BaseType {
@@ -33,13 +33,18 @@ public class GraphSchema {
 
     private void loadNodeTypes(final Graph graph) {
         for (final String label : graph.getNodeLabels()) {
+            final String fixedLabel = fixLabelNaming(label);
             final NodeType type = new NodeType();
-            type.label = label;
-            nodeTypes.put(label, type);
+            type.label = fixedLabel;
+            nodeTypes.put(fixedLabel, type);
             final Map<String, Type> propertyKeyTypes = graph.getPropertyKeyTypesForNodeLabel(label);
             for (final String key : propertyKeyTypes.keySet())
                 type.propertyKeyTypes.put(fixKeyNaming(key), propertyKeyTypes.get(key));
         }
+    }
+
+    private String fixLabelNaming(final String label) {
+        return StringUtils.replace(label, "-", "");
     }
 
     private String fixKeyNaming(final String key) {
@@ -52,9 +57,10 @@ public class GraphSchema {
 
     private void loadEdgeTypes(final Graph graph) {
         for (final String label : graph.getEdgeLabels()) {
+            final String fixedLabel = fixLabelNaming(label);
             final EdgeType type = new EdgeType();
-            type.label = label;
-            edgeTypes.put(label, type);
+            type.label = fixedLabel;
+            edgeTypes.put(fixedLabel, type);
             final Map<String, Type> propertyKeyTypes = graph.getPropertyKeyTypesForEdgeLabel(label);
             for (final String key : propertyKeyTypes.keySet())
                 type.propertyKeyTypes.put(fixKeyNaming(key), propertyKeyTypes.get(key));
@@ -64,11 +70,11 @@ public class GraphSchema {
     }
 
     private void loadEdgeType(final Graph graph, final Edge edge) {
-        final EdgeType type = edgeTypes.get(edge.getLabel());
-        final Node fromNode = graph.getNode(edge.getFromId());
-        final Node toNode = graph.getNode(edge.getToId());
-        type.fromLabels.add(fromNode.getLabel());
-        type.toLabels.add(toNode.getLabel());
+        final EdgeType type = edgeTypes.get(fixLabelNaming(edge.getLabel()));
+        final String fromLabel = fixLabelNaming(graph.getNode(edge.getFromId()).getLabel());
+        final String toLabel = fixLabelNaming(graph.getNode(edge.getToId()).getLabel());
+        type.fromLabels.add(fromLabel);
+        type.toLabels.add(toLabel);
     }
 
     public NodeType[] getNodeTypes() {

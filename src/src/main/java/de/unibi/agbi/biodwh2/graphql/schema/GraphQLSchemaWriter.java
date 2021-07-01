@@ -29,9 +29,9 @@ public final class GraphQLSchemaWriter extends SchemaWriter {
         writeInterfaces(writer);
         writeQueryType(writer);
         for (final GraphSchema.NodeType type : schema.getNodeTypes())
-            writeNodeType(writer, type);
-        for (final GraphSchema.EdgeType type : schema.getEdgeTypes())
-            writeEdgeType(writer, type);
+            writeNodeType(writer, schema, type);
+        //for (final GraphSchema.EdgeType type : schema.getEdgeTypes())
+        //    writeEdgeType(writer, type);
     }
 
     private void writeMainSchema(final BufferedWriter writer) throws IOException {
@@ -48,9 +48,7 @@ public final class GraphQLSchemaWriter extends SchemaWriter {
     private void writeInterfaces(final BufferedWriter writer) throws IOException {
         writeLine(writer, "interface Node {");
         writeLine(writer, "  _id: ID!");
-        writeLine(writer, "}");
-        writeLine(writer, "interface Edge {");
-        writeLine(writer, "  _id: ID!");
+        writeLine(writer, "  _label: String!");
         writeLine(writer, "}");
     }
 
@@ -66,7 +64,7 @@ public final class GraphQLSchemaWriter extends SchemaWriter {
             final String arguments = nodeType.propertyKeyTypes.keySet().stream().map(
                     key -> mapPropertyToKeyTypeDefinition(nodeType, key).replace("!", "")).collect(
                     Collectors.joining(", "));
-            writeLine(writer, "  " + nodeType.label + "(" + arguments + "): [" + nodeType.label + "]!");
+            writeLine(writer, "  " + nodeType.label + "(" + arguments + "): [" + nodeType.label + "!]!");
         }
     }
 
@@ -84,7 +82,7 @@ public final class GraphQLSchemaWriter extends SchemaWriter {
         if ("_id".equals(key))
             return "ID!";
         if (type == String.class)
-            return "String";
+            return "_label".equals(key) ? "String!" : "String";
         if (type == Integer.class || type == int.class)
             return "Int";
         if (type == Float.class || type == float.class)
@@ -94,6 +92,7 @@ public final class GraphQLSchemaWriter extends SchemaWriter {
         return "String";
     }
 
+    /*
     private void writeQueryTypeEdgeEndpoints(final BufferedWriter writer) throws IOException {
         for (final GraphSchema.EdgeType type : schema.getEdgeTypes())
             writeQueryTypeEdgeEndpoint(writer, type);
@@ -115,10 +114,19 @@ public final class GraphQLSchemaWriter extends SchemaWriter {
     private String getEdgeTypeName(final String fromLabel, final String label, final String toLabel) {
         return fromLabel + "__" + label + "__" + toLabel + "__Edge";
     }
+    */
 
-    private void writeNodeType(final BufferedWriter writer, final GraphSchema.NodeType type) throws IOException {
+    private void writeNodeType(final BufferedWriter writer, final GraphSchema schema,
+                               final GraphSchema.NodeType type) throws IOException {
         writeLine(writer, "type " + type.label + " implements Node {");
         writeTypeProperties(writer, type);
+        for (final GraphSchema.EdgeType edgeType : schema.getEdgeTypes())
+            if (edgeType.fromLabels.contains(type.label)) {
+                final String arguments = edgeType.propertyKeyTypes.keySet().stream().map(
+                        key -> mapPropertyToKeyTypeDefinition(edgeType, key).replace("!", "")).collect(
+                        Collectors.joining(", "));
+                writeLine(writer, "  " + edgeType.label + '(' + arguments + "): [Node!]!");
+            }
         writeLine(writer, "}");
     }
 
@@ -127,6 +135,7 @@ public final class GraphQLSchemaWriter extends SchemaWriter {
             writeLine(writer, "  " + mapPropertyToKeyTypeDefinition(type, key));
     }
 
+    /*
     private void writeEdgeType(final BufferedWriter writer, final GraphSchema.EdgeType type) throws IOException {
         for (final String fromLabel : type.fromLabels) {
             for (final String toLabel : type.toLabels) {
@@ -138,4 +147,5 @@ public final class GraphQLSchemaWriter extends SchemaWriter {
             }
         }
     }
+    */
 }
