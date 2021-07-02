@@ -10,7 +10,7 @@ import graphql.schema.idl.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-class GraphWiringFactory implements WiringFactory {
+final class GraphWiringFactory implements WiringFactory {
     private static final Logger LOGGER = LoggerFactory.getLogger(GraphWiringFactory.class);
 
     private final Graph graph;

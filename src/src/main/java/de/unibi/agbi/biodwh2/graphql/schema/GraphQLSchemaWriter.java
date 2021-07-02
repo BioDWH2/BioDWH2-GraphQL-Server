@@ -79,7 +79,7 @@ public final class GraphQLSchemaWriter extends SchemaWriter {
     }
 
     private String getGraphQLTypeName(final String key, final Class<?> type) {
-        if ("_id".equals(key))
+        if ("_id".equals(key) || "_to_id".equals(key) || "_from_id".equals(key))
             return "ID!";
         if (type == String.class)
             return "_label".equals(key) ? "String!" : "String";
