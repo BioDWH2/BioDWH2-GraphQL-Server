@@ -132,9 +132,15 @@ final class GraphDataFetcher implements DataFetcher<Object> {
                                              ((Edge) model).getToId()));
                     }
                 }
-            } else if (selection instanceof InlineFragment)
-                return selectResults(schema, ((InlineFragment) selection).getSelectionSet(), model);
-            else if (LOGGER.isErrorEnabled())
+            } else if (selection instanceof InlineFragment) {
+                final InlineFragment fragment = (InlineFragment) selection;
+                if (fragment.getTypeCondition().getName().equals(model.getProperty(Node.LABEL_FIELD))) {
+                    final Map<String, Object> fragmentResults = selectResults(schema, fragment.getSelectionSet(),
+                                                                              model);
+                    for (final String key : fragmentResults.keySet())
+                        result.put(key, fragmentResults.get(key));
+                }
+            } else if (LOGGER.isErrorEnabled())
                 LOGGER.error("Failed to select results for selection '" + selection + "'");
         }
         return result;

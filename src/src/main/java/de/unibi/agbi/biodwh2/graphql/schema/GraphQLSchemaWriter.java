@@ -51,6 +51,7 @@ public final class GraphQLSchemaWriter extends SchemaWriter {
         writeLine(writer, "interface Node {");
         writeLine(writer, "  _id: ID!");
         writeLine(writer, "  _label: String!");
+        writeLine(writer, "  _edges: [Edge!]!");
         writeLine(writer, "}");
         writeLine(writer, "interface Edge {");
         writeLine(writer, "  _id: ID!");
@@ -114,6 +115,7 @@ public final class GraphQLSchemaWriter extends SchemaWriter {
                 final String arguments = buildArgumentsString(type.propertyKeyTypes);
                 writeLine(writer, "  " + edgeType.label + '(' + arguments + "): [" + edgeType.label + "!]!");
             }
+        writeLine(writer, "  _edges: [Edge!]!");
         writeLine(writer, "}");
     }
 
