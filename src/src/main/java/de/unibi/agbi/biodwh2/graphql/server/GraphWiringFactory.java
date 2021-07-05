@@ -20,12 +20,12 @@ final class GraphWiringFactory implements WiringFactory {
     }
 
     @Override
-    public boolean providesScalar(ScalarWiringEnvironment environment) {
+    public boolean providesScalar(final ScalarWiringEnvironment environment) {
         return getScalar(environment) != null;
     }
 
     @Override
-    public GraphQLScalarType getScalar(ScalarWiringEnvironment environment) {
+    public GraphQLScalarType getScalar(final ScalarWiringEnvironment environment) {
         if (environment.getScalarTypeDefinition().getName().equals(Scalars.GraphQLInt.getName()))
             return Scalars.GraphQLInt;
         if (environment.getScalarTypeDefinition().getName().equals(Scalars.GraphQLFloat.getName()))
@@ -42,59 +42,57 @@ final class GraphWiringFactory implements WiringFactory {
     }
 
     @Override
-    public boolean providesTypeResolver(InterfaceWiringEnvironment environment) {
-        return getTypeResolver(environment) != null;
+    public boolean providesTypeResolver(final InterfaceWiringEnvironment environment) {
+        return true;
     }
 
     @Override
-    public TypeResolver getTypeResolver(InterfaceWiringEnvironment environment) {
+    public TypeResolver getTypeResolver(final InterfaceWiringEnvironment environment) {
         return new InterfaceTypeResolver();
     }
 
     @Override
-    public boolean providesTypeResolver(UnionWiringEnvironment environment) {
-        return getTypeResolver(environment) != null;
+    public boolean providesTypeResolver(final UnionWiringEnvironment environment) {
+        return true;
     }
 
     @Override
-    public TypeResolver getTypeResolver(UnionWiringEnvironment environment) {
-        if (LOGGER.isWarnEnabled())
-            LOGGER.warn("Failed to get union {}", environment.getUnionTypeDefinition());
-        return null;
+    public TypeResolver getTypeResolver(final UnionWiringEnvironment environment) {
+        return new UnionTypeResolver();
     }
 
     @Override
-    public boolean providesDataFetcherFactory(FieldWiringEnvironment environment) {
+    public boolean providesDataFetcherFactory(final FieldWiringEnvironment environment) {
         return false;
     }
 
     @Override
-    public <T> DataFetcherFactory<T> getDataFetcherFactory(FieldWiringEnvironment environment) {
+    public <T> DataFetcherFactory<T> getDataFetcherFactory(final FieldWiringEnvironment environment) {
         return null;
     }
 
     @Override
-    public boolean providesSchemaDirectiveWiring(SchemaDirectiveWiringEnvironment environment) {
+    public boolean providesSchemaDirectiveWiring(final SchemaDirectiveWiringEnvironment environment) {
         return getSchemaDirectiveWiring(environment) != null;
     }
 
     @Override
-    public SchemaDirectiveWiring getSchemaDirectiveWiring(SchemaDirectiveWiringEnvironment environment) {
+    public SchemaDirectiveWiring getSchemaDirectiveWiring(final SchemaDirectiveWiringEnvironment environment) {
         return null;
     }
 
     @Override
-    public boolean providesDataFetcher(FieldWiringEnvironment environment) {
+    public boolean providesDataFetcher(final FieldWiringEnvironment environment) {
         return getDataFetcher(environment) != null;
     }
 
     @Override
-    public DataFetcher getDataFetcher(FieldWiringEnvironment environment) {
+    public DataFetcher<?> getDataFetcher(final FieldWiringEnvironment environment) {
         return null;
     }
 
     @Override
-    public DataFetcher getDefaultDataFetcher(FieldWiringEnvironment environment) {
+    public DataFetcher<?> getDefaultDataFetcher(final FieldWiringEnvironment environment) {
         return new GraphDataFetcher(graph);
     }
 }

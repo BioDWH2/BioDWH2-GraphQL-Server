@@ -149,7 +149,7 @@ public class GraphQLServer {
         config.showJavalinBanner = false;
     }
 
-    private static void handleRootPost(Context ctx) throws IOException {
+    private static void handleRootPost(final Context ctx) throws IOException {
         RequestBody body = ctx.bodyValidator(RequestBody.class).getOrNull();
         if (body == null) {
             ctx.result("");
