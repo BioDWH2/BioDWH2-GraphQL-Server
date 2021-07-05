@@ -1,3 +1,5 @@
+![Java CI](https://github.com/BioDWH2/BioDWH2-GraphQL-Server/workflows/Java%20CI/badge.svg?branch=develop) ![Release](https://img.shields.io/github/v/release/BioDWH2/BioDWH2-GraphQL-Server) ![Downloads](https://img.shields.io/github/downloads/BioDWH2/BioDWH2-GraphQL-Server/total) ![License](https://img.shields.io/github/license/BioDWH2/BioDWH2-GraphQL-Server)
+
 # BioDWH2-GraphQL-Server
 | :warning: The GraphQL-Server is still experimental! For a stable solution, please try the [BioDWH2-Neo4j-Server](https://github.com/BioDWH2/BioDWH2-Neo4j-Server) or directly use the mapped GraphML file. |
 | --- |
