@@ -1,5 +1,6 @@
 package de.unibi.agbi.biodwh2.graphql.server;
 
+import de.unibi.agbi.biodwh2.core.io.mvstore.MVStoreModel;
 import de.unibi.agbi.biodwh2.core.model.graph.Edge;
 import de.unibi.agbi.biodwh2.core.model.graph.Graph;
 import de.unibi.agbi.biodwh2.core.model.graph.Node;
@@ -24,77 +25,34 @@ final class GraphDataFetcher implements DataFetcher<Object> {
             final Map<String, Object> node = environment.getSource();
             return node.get(environment.getFieldDefinition().getName());
         }
-        final String label = environment.getMergedField().getName();
-        final GraphQLType type = environment.getGraphQLSchema().getType(label);
-        if (type instanceof GraphQLObjectType)
-            return getObject(environment, (GraphQLObjectType) type);
-        return null;
+        return getNode(environment);
     }
 
-    private Object getObject(final DataFetchingEnvironment environment, final GraphQLObjectType type) {
+    private Object getNode(final DataFetchingEnvironment environment) {
+        return getNode(environment.getGraphQLSchema(), environment.getMergedField().getSingleField());
+    }
+
+    private Object getNode(final GraphQLSchema schema, final Field field) {
+        final String label = field.getName();
+        final GraphQLObjectType type = (GraphQLObjectType) schema.getType(label);
         if (type.getInterfaces().stream().anyMatch(i -> i.getName().equals("Node"))) {
-            final Field field = environment.getMergedField().getSingleField();
-            final Map<String, Comparable<?>> arguments = convertArgumentsForGraph(environment.getArguments());
+            final Map<String, Comparable<?>> arguments = convertArgumentsForGraph(field.getArguments());
             final List<Object> result = new ArrayList<>();
-            for (final Node node : graph.findNodes(type.getName(), arguments)) {
-                final Map<String, Object> nodeResult = new HashMap<>();
-                for (final Selection<?> selection : field.getSelectionSet().getSelections()) {
-                    if (selection instanceof Field) {
-                        final Field selectionField = (Field) selection;
-                        final GraphQLFieldDefinition definition = type.getFieldDefinition(selectionField.getName());
-                        if (definition.getType() instanceof GraphQLScalarType)
-                            nodeResult.put(selectionField.getResultKey(), node.getProperty(selectionField.getName()));
-                        else if (definition.getType() instanceof GraphQLList)
-                            nodeResult.put(selectionField.getResultKey(), node.getProperty(selectionField.getName()));
-                        else
-                            nodeResult.put(selectionField.getResultKey(), getEdges(node, selectionField));
-                    } else {
-                        // TODO: error
-                    }
-                }
-                result.add(nodeResult);
-            }
+            for (final Node node : graph.findNodes(type.getName(), arguments))
+                result.add(selectResults(schema, field.getSelectionSet(), node));
             return result;
         }
-        /*
-        if (type.getInterfaces().stream().anyMatch(i -> i.getName().equals("Edge"))) {
-            final List<Edge> result = new ArrayList<>();
-            final String edgeLabel = StringUtils.splitByWholeSeparator(type.getName(), "__")[1];
-            graph.findEdges(edgeLabel, arguments).forEach(result::add);
-            return result;
-        }
-        */
         return null;
     }
 
-    private List<Object> getEdges(final Node fromNode, final Field field) {
+    private List<Object> getEdges(final GraphQLSchema schema, final Node fromNode, final Field field) {
         final List<Object> result = new ArrayList<>();
         final Map<String, Comparable<?>> arguments = convertArgumentsForGraph(field.getArguments());
         arguments.put(Edge.FROM_ID_FIELD, fromNode.getId());
         for (final Edge edge : graph.findEdges(field.getName(), arguments)) {
-            final Map<String, Object> edgeResult = new HashMap<>();
-            for (final Selection<?> selection : field.getSelectionSet().getSelections()) {
-                if (selection instanceof Field) {
-                    final Field selectionField = (Field) selection;
-                    final Object value = edge.get(selectionField.getName());
-                    if (value != null)
-                        edgeResult.put(selectionField.getResultKey(), value);
-                } else {
-                    // TODO: error
-                }
-            }
-            result.add(edgeResult);
+            final Node toNode = graph.getNode(edge.getToId());
+            result.add(selectResults(schema, field.getSelectionSet(), toNode));
         }
-        return result;
-    }
-
-    private Map<String, Comparable<?>> convertArgumentsForGraph(final Map<String, Object> arguments) {
-        final Map<String, Comparable<?>> result = new HashMap<>();
-        for (final String key : arguments.keySet())
-            if ("_id".equals(key) || "_label".equals(key) || "_mapped".equals(key))
-                result.put('_' + key, (Comparable<?>) arguments.get(key));
-            else
-                result.put(key, (Comparable<?>) arguments.get(key));
         return result;
     }
 
@@ -115,6 +73,31 @@ final class GraphDataFetcher implements DataFetcher<Object> {
                 result.put(key, ((IntValue) value).getValue());
             else {
                 // TODO
+            }
+        }
+        return result;
+    }
+
+    private Map<String, Object> selectResults(final GraphQLSchema schema, final SelectionSet selectionSet,
+                                              final MVStoreModel model) {
+        final Map<String, Object> result = new HashMap<>();
+        final GraphQLObjectType type = schema.getObjectType(model.getProperty(Node.LABEL_FIELD));
+        for (final Selection<?> selection : selectionSet.getSelections()) {
+            if (selection instanceof Field) {
+                final Field selectionField = (Field) selection;
+                if ("__typename".equals(selectionField.getName()))
+                    result.put(selectionField.getResultKey(), model.get(Node.LABEL_FIELD));
+                else {
+                    final GraphQLFieldDefinition definition = type.getFieldDefinition(selectionField.getName());
+                    if (definition.getType() instanceof GraphQLScalarType)
+                        result.put(selectionField.getResultKey(), model.getProperty(selectionField.getName()));
+                    else if (definition.getType() instanceof GraphQLList)
+                        result.put(selectionField.getResultKey(), model.getProperty(selectionField.getName()));
+                    else
+                        result.put(selectionField.getResultKey(), getEdges(schema, (Node) model, selectionField));
+                }
+            } else {
+                // TODO: error
             }
         }
         return result;
