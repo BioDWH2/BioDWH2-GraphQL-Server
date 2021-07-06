@@ -9,6 +9,7 @@ import graphql.schema.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -29,12 +30,15 @@ final class GraphDataFetcher implements DataFetcher<Object> {
             final Map<String, Object> properties = environment.getSource();
             return properties.get(environment.getFieldDefinition().getName());
         }
-        return getObject(environment.getGraphQLSchema(), environment.getMergedField().getSingleField());
+        return getObject(environment);
     }
 
-    private Object getObject(final GraphQLSchema schema, final Field field) {
-        return getObject(schema, schema.getObjectType(field.getName()), field.getArguments(), field.getSelectionSet(),
-                         null, null);
+    private Object getObject(final DataFetchingEnvironment environment) {
+        final GraphQLSchema schema = environment.getGraphQLSchema();
+        final Field field = environment.getMergedField().getSingleField();
+        final GraphQLImplementingType implementingType = (GraphQLImplementingType) unwrapType(
+                environment.getFieldType());
+        return getObject(schema, implementingType, field.getArguments(), field.getSelectionSet(), null, null);
     }
 
     private Object getObject(final GraphQLSchema schema, final GraphQLImplementingType type,
@@ -55,15 +59,19 @@ final class GraphDataFetcher implements DataFetcher<Object> {
             return result;
         } else if (type instanceof GraphQLInterfaceType) {
             if ("Node".equals(type.getName())) {
-                if (argumentsMap.size() == 1 && argumentsMap.containsKey(Node.ID_FIELD))
-                    return selectResults(schema, selectionSet, graph.getNode((Long) argumentsMap.get(Node.ID_FIELD)));
+                if (argumentsMap.size() == 1 && argumentsMap.containsKey(Node.ID_FIELD)) {
+                    final long id = getLongProperty(argumentsMap, Node.ID_FIELD);
+                    return selectResults(schema, selectionSet, graph.getNode(id));
+                }
                 final List<Object> result = new ArrayList<>();
                 for (final Node node : graph.findNodes(argumentsMap))
                     result.add(selectResults(schema, selectionSet, node));
                 return result;
             } else if ("Edge".equals(type.getName())) {
-                if (argumentsMap.size() == 1 && argumentsMap.containsKey(Edge.ID_FIELD))
-                    return selectResults(schema, selectionSet, graph.getEdge((Long) argumentsMap.get(Edge.ID_FIELD)));
+                if (argumentsMap.size() == 1 && argumentsMap.containsKey(Edge.ID_FIELD)) {
+                    final long id = getLongProperty(argumentsMap, Edge.ID_FIELD);
+                    return selectResults(schema, selectionSet, graph.getEdge(id));
+                }
                 final List<Object> result = new ArrayList<>();
                 for (final Edge edge : graph.findEdges(argumentsMap))
                     result.add(selectResults(schema, selectionSet, edge));
@@ -105,44 +113,71 @@ final class GraphDataFetcher implements DataFetcher<Object> {
 
     private Map<String, Object> selectResults(final GraphQLSchema schema, final SelectionSet selectionSet,
                                               final MVStoreModel model) {
+        if (model == null)
+            return null;
         final Map<String, Object> result = new HashMap<>();
         result.put("__typename", model.get(Node.LABEL_FIELD));
-        final GraphQLObjectType type = schema.getObjectType(model.getProperty(Node.LABEL_FIELD));
-        for (final Selection<?> selection : selectionSet.getSelections()) {
-            if (selection instanceof Field) {
-                final Field selectionField = (Field) selection;
-                if ("__typename".equals(selectionField.getName()))
-                    result.put(selectionField.getResultKey(), model.get(Node.LABEL_FIELD));
-                else {
-                    final GraphQLFieldDefinition definition = type.getFieldDefinition(selectionField.getName());
-                    GraphQLType fieldType = definition.getType();
-                    while (fieldType instanceof GraphQLModifiedType)
-                        fieldType = ((GraphQLModifiedType) fieldType).getWrappedType();
-                    if (fieldType instanceof GraphQLScalarType)
-                        result.put(selectionField.getResultKey(),
-                                   model.getProperty(translatePropertyKey(selectionField.getName())));
-                    else if (model instanceof Node) {
-                        result.put(selectionField.getResultKey(),
-                                   getObject(schema, (GraphQLImplementingType) fieldType, selectionField.getArguments(),
-                                             selectionField.getSelectionSet(), Edge.FROM_ID_FIELD, model.getId()));
-                    } else if (model instanceof Edge) {
-                        result.put(selectionField.getResultKey(),
-                                   getObject(schema, (GraphQLImplementingType) fieldType, selectionField.getArguments(),
-                                             selectionField.getSelectionSet(), Node.ID_FIELD,
-                                             ((Edge) model).getToId()));
-                    }
-                }
-            } else if (selection instanceof InlineFragment) {
-                final InlineFragment fragment = (InlineFragment) selection;
-                if (fragment.getTypeCondition().getName().equals(model.getProperty(Node.LABEL_FIELD))) {
-                    final Map<String, Object> fragmentResults = selectResults(schema, fragment.getSelectionSet(),
-                                                                              model);
-                    for (final String key : fragmentResults.keySet())
-                        result.put(key, fragmentResults.get(key));
-                }
-            } else if (LOGGER.isErrorEnabled())
-                LOGGER.error("Failed to select results for selection '" + selection + "'");
-        }
+        for (final Selection<?> selection : selectionSet.getSelections())
+            selectResult(schema, selection, model, result);
         return result;
+    }
+
+    private void selectResult(final GraphQLSchema schema, final Selection<?> selection, final MVStoreModel model,
+                              final Map<String, Object> result) {
+        if (selection instanceof Field)
+            selectFieldResult(schema, (Field) selection, model, result);
+        else if (selection instanceof InlineFragment)
+            selectInlineFragmentResult(schema, (InlineFragment) selection, model, result);
+        else if (LOGGER.isErrorEnabled())
+            LOGGER.error("Failed to select results for selection '" + selection + "'");
+    }
+
+    private void selectFieldResult(final GraphQLSchema schema, final Field field, final MVStoreModel model,
+                                   final Map<String, Object> result) {
+        if ("__typename".equals(field.getName()))
+            result.put(field.getResultKey(), model.get(Node.LABEL_FIELD));
+        else {
+            final GraphQLObjectType type = schema.getObjectType(model.getProperty(Node.LABEL_FIELD));
+            final GraphQLFieldDefinition definition = type.getFieldDefinition(field.getName());
+            final GraphQLType fieldType = unwrapType(definition.getType());
+            if (fieldType instanceof GraphQLScalarType)
+                result.put(field.getResultKey(), model.getProperty(translatePropertyKey(field.getName())));
+            else if (fieldType instanceof GraphQLImplementingType) {
+                final GraphQLImplementingType implementingType = (GraphQLImplementingType) fieldType;
+                if (model instanceof Node) {
+                    result.put(field.getResultKey(),
+                               getObject(schema, implementingType, field.getArguments(), field.getSelectionSet(),
+                                         Edge.FROM_ID_FIELD, model.getId()));
+                } else if (model instanceof Edge) {
+                    final Edge edge = (Edge) model;
+                    final long targetId = "_to".equals(field.getName()) ? edge.getToId() : edge.getFromId();
+                    result.put(field.getResultKey(),
+                               getObject(schema, implementingType, field.getArguments(), field.getSelectionSet(),
+                                         Node.ID_FIELD, targetId));
+                }
+            }
+        }
+    }
+
+    private GraphQLType unwrapType(GraphQLType fieldType) {
+        while (fieldType instanceof GraphQLModifiedType)
+            fieldType = ((GraphQLModifiedType) fieldType).getWrappedType();
+        return fieldType;
+    }
+
+    private void selectInlineFragmentResult(final GraphQLSchema schema, final InlineFragment fragment,
+                                            final MVStoreModel model, final Map<String, Object> result) {
+        if (fragment.getTypeCondition().getName().equals(model.getProperty(Node.LABEL_FIELD))) {
+            final Map<String, Object> fragmentResults = selectResults(schema, fragment.getSelectionSet(), model);
+            for (final String key : fragmentResults.keySet())
+                result.put(key, fragmentResults.get(key));
+        }
+    }
+
+    private long getLongProperty(final Map<String, Comparable<?>> properties, final String key) {
+        final Object object = properties.get(key);
+        if (object instanceof BigInteger)
+            return ((BigInteger) object).longValue();
+        return (long) object;
     }
 }

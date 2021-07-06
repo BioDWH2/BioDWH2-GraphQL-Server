@@ -27,13 +27,39 @@ public final class GraphQLSchemaWriter extends SchemaWriter {
     }
 
     private void save(final BufferedWriter writer) throws IOException {
-        writeMainSchema(writer);
         writeInterfaces(writer);
+        writeMainSchema(writer);
         writeQueryType(writer);
+        writeLine(writer, "# Node type definitions");
         for (final GraphSchema.NodeType type : schema.getNodeTypes())
             writeNodeType(writer, schema, type);
+        writer.newLine();
+        writeLine(writer, "# Edge type definitions");
         for (final GraphSchema.EdgeType type : schema.getEdgeTypes())
             writeEdgeType(writer, type);
+    }
+
+    private void writeInterfaces(final BufferedWriter writer) throws IOException {
+        writeLine(writer, "# Primary node and edge interface definitions");
+        writeLine(writer, "interface Node {");
+        writeLine(writer, "  _id: ID!");
+        writeLine(writer, "  _label: String!");
+        writeLine(writer, "  _edges(_label: String): [Edge!]!");
+        writeLine(writer, "}");
+        writeLine(writer, "interface Edge {");
+        writeLine(writer, "  _id: ID!");
+        writeLine(writer, "  _label: String!");
+        writeLine(writer, "  _from_id: ID!");
+        writeLine(writer, "  _from: Node!");
+        writeLine(writer, "  _to_id: ID!");
+        writeLine(writer, "  _to: Node!");
+        writeLine(writer, "}");
+        writer.newLine();
+    }
+
+    private void writeLine(final BufferedWriter writer, final String line) throws IOException {
+        writer.write(line);
+        writer.newLine();
     }
 
     private void writeMainSchema(final BufferedWriter writer) throws IOException {
@@ -42,32 +68,20 @@ public final class GraphQLSchemaWriter extends SchemaWriter {
         writeLine(writer, "}");
     }
 
-    private void writeLine(final BufferedWriter writer, final String line) throws IOException {
-        writer.write(line);
-        writer.newLine();
-    }
-
-    private void writeInterfaces(final BufferedWriter writer) throws IOException {
-        writeLine(writer, "interface Node {");
-        writeLine(writer, "  _id: ID!");
-        writeLine(writer, "  _label: String!");
-        writeLine(writer, "  _edges: [Edge!]!");
-        writeLine(writer, "}");
-        writeLine(writer, "interface Edge {");
-        writeLine(writer, "  _id: ID!");
-        writeLine(writer, "  _from_id: ID!");
-        writeLine(writer, "  _to_id: ID!");
-        writeLine(writer, "  _label: String!");
-        writeLine(writer, "}");
-    }
-
     private void writeQueryType(final BufferedWriter writer) throws IOException {
         writeLine(writer, "type QueryType {");
+        writeLine(writer, "  _node(_id: ID!): Node");
+        writeLine(writer, "  _edge(_id: ID!): Edge");
+        writer.newLine();
+        writeLine(writer, "  # Node query endpoints");
         for (final GraphSchema.BaseType type : schema.getNodeTypes())
             writeQueryTypeEndpoint(writer, type);
+        writer.newLine();
+        writeLine(writer, "  # Edge query endpoints");
         for (final GraphSchema.BaseType type : schema.getEdgeTypes())
             writeQueryTypeEndpoint(writer, type);
         writeLine(writer, "}");
+        writer.newLine();
     }
 
     private void writeQueryTypeEndpoint(final BufferedWriter writer,
@@ -77,7 +91,7 @@ public final class GraphQLSchemaWriter extends SchemaWriter {
     }
 
     private String buildArgumentsString(final Map<String, Type> propertyKeyTypes) {
-        return propertyKeyTypes.keySet().stream().map(
+        return propertyKeyTypes.keySet().stream().filter(key -> !"_label".equals(key)).map(
                 key -> mapPropertyToKeyTypeDefinition(key, propertyKeyTypes.get(key)).replace("!", "")).collect(
                 Collectors.joining(", "));
     }
@@ -115,7 +129,7 @@ public final class GraphQLSchemaWriter extends SchemaWriter {
                 final String arguments = buildArgumentsString(type.propertyKeyTypes);
                 writeLine(writer, "  " + edgeType.label + '(' + arguments + "): [" + edgeType.label + "!]!");
             }
-        writeLine(writer, "  _edges: [Edge!]!");
+        writeLine(writer, "  _edges(_label: String): [Edge!]!");
         writeLine(writer, "}");
     }
 
