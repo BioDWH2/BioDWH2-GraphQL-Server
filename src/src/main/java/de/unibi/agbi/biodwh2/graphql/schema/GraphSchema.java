@@ -11,6 +11,14 @@ public class GraphSchema {
     public static class BaseType {
         String label;
         Map<String, Type> propertyKeyTypes = new HashMap<>();
+
+        final String fixedLabel() {
+            return fixLabel(label);
+        }
+
+        public static String fixLabel(final String label) {
+            return StringUtils.replace(label, "-", "_");
+        }
     }
 
     public static class NodeType extends BaseType {
@@ -33,18 +41,13 @@ public class GraphSchema {
 
     private void loadNodeTypes(final Graph graph) {
         for (final String label : graph.getNodeLabels()) {
-            final String fixedLabel = fixLabelNaming(label);
             final NodeType type = new NodeType();
-            type.label = fixedLabel;
-            nodeTypes.put(fixedLabel, type);
+            type.label = label;
+            nodeTypes.put(label, type);
             final Map<String, Type> propertyKeyTypes = graph.getPropertyKeyTypesForNodeLabel(label);
             for (final String key : propertyKeyTypes.keySet())
                 type.propertyKeyTypes.put(fixKeyNaming(key), propertyKeyTypes.get(key));
         }
-    }
-
-    private String fixLabelNaming(final String label) {
-        return StringUtils.replace(label, "-", "");
     }
 
     private String fixKeyNaming(final String key) {
@@ -57,10 +60,9 @@ public class GraphSchema {
 
     private void loadEdgeTypes(final Graph graph) {
         for (final String label : graph.getEdgeLabels()) {
-            final String fixedLabel = fixLabelNaming(label);
             final EdgeType type = new EdgeType();
-            type.label = fixedLabel;
-            edgeTypes.put(fixedLabel, type);
+            type.label = label;
+            edgeTypes.put(label, type);
             final Map<String, Type> propertyKeyTypes = graph.getPropertyKeyTypesForEdgeLabel(label);
             for (final String key : propertyKeyTypes.keySet())
                 type.propertyKeyTypes.put(fixKeyNaming(key), propertyKeyTypes.get(key));
@@ -70,9 +72,9 @@ public class GraphSchema {
     }
 
     private void loadEdgeType(final Graph graph, final Edge edge) {
-        final EdgeType type = edgeTypes.get(fixLabelNaming(edge.getLabel()));
-        final String fromLabel = fixLabelNaming(graph.getNode(edge.getFromId()).getLabel());
-        final String toLabel = fixLabelNaming(graph.getNode(edge.getToId()).getLabel());
+        final EdgeType type = edgeTypes.get(edge.getLabel());
+        final String fromLabel = graph.getNode(edge.getFromId()).getLabel();
+        final String toLabel = graph.getNode(edge.getToId()).getLabel();
         type.fromLabels.add(fromLabel);
         type.toLabels.add(toLabel);
     }

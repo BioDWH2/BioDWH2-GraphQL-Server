@@ -27,6 +27,7 @@ public final class GraphQLSchemaWriter extends SchemaWriter {
     }
 
     private void save(final BufferedWriter writer) throws IOException {
+        writeDirectives(writer);
         writeInterfaces(writer);
         writeMainSchema(writer);
         writeQueryType(writer);
@@ -37,6 +38,13 @@ public final class GraphQLSchemaWriter extends SchemaWriter {
         writeLine(writer, "# Edge type definitions");
         for (final GraphSchema.EdgeType type : schema.getEdgeTypes())
             writeEdgeType(writer, type);
+    }
+
+    private void writeDirectives(final BufferedWriter writer) throws IOException {
+        writeLine(writer, "# Primary directive definitions");
+        writeLine(writer, "directive @GraphLabel(value: String) on OBJECT");
+        writeLine(writer, "directive @GraphProperty(value: String) on FIELD_DEFINITION");
+        writer.newLine();
     }
 
     private void writeInterfaces(final BufferedWriter writer) throws IOException {
@@ -72,6 +80,7 @@ public final class GraphQLSchemaWriter extends SchemaWriter {
         writeLine(writer, "type QueryType {");
         writeLine(writer, "  _node(_id: ID!): Node");
         writeLine(writer, "  _edge(_id: ID!): Edge");
+        writeLine(writer, "  _edges(_to_id: ID, _from_id: ID, _label: String): [Edge!]!");
         writer.newLine();
         writeLine(writer, "  # Node query endpoints");
         for (final GraphSchema.BaseType type : schema.getNodeTypes())
@@ -87,7 +96,7 @@ public final class GraphQLSchemaWriter extends SchemaWriter {
     private void writeQueryTypeEndpoint(final BufferedWriter writer,
                                         final GraphSchema.BaseType type) throws IOException {
         final String arguments = buildArgumentsString(type.propertyKeyTypes);
-        writeLine(writer, "  " + type.label + "(" + arguments + "): [" + type.label + "!]!");
+        writeLine(writer, "  " + type.fixedLabel() + "(" + arguments + "): [" + type.fixedLabel() + "!]!");
     }
 
     private String buildArgumentsString(final Map<String, Type> propertyKeyTypes) {
@@ -122,12 +131,15 @@ public final class GraphQLSchemaWriter extends SchemaWriter {
 
     private void writeNodeType(final BufferedWriter writer, final GraphSchema schema,
                                final GraphSchema.NodeType type) throws IOException {
-        writeLine(writer, "type " + type.label + " implements Node {");
+        final String directive = type.label.equals(type.fixedLabel()) ? "" :
+                                 " @GraphLabel(value: \"" + type.label + "\")";
+        writeLine(writer, "type " + type.fixedLabel() + " implements Node" + directive + " {");
         writeTypeProperties(writer, type);
         for (final GraphSchema.EdgeType edgeType : schema.getEdgeTypes())
             if (edgeType.fromLabels.contains(type.label)) {
                 final String arguments = buildArgumentsString(type.propertyKeyTypes);
-                writeLine(writer, "  " + edgeType.label + '(' + arguments + "): [" + edgeType.label + "!]!");
+                writeLine(writer,
+                          "  " + edgeType.fixedLabel() + '(' + arguments + "): [" + edgeType.fixedLabel() + "!]!");
             }
         writeLine(writer, "  _edges(_label: String): [Edge!]!");
         writeLine(writer, "}");
@@ -139,7 +151,9 @@ public final class GraphQLSchemaWriter extends SchemaWriter {
     }
 
     private void writeEdgeType(final BufferedWriter writer, final GraphSchema.EdgeType type) throws IOException {
-        writeLine(writer, "type " + type.label + " implements Edge {");
+        final String directive = type.label.equals(type.fixedLabel()) ? "" :
+                                 " @GraphLabel(value: \"" + type.label + "\")";
+        writeLine(writer, "type " + type.fixedLabel() + " implements Edge" + directive + " {");
         writeTypeProperties(writer, type);
         writeLine(writer, "  _from: Node!");
         writeLine(writer, "  _to: Node!");
