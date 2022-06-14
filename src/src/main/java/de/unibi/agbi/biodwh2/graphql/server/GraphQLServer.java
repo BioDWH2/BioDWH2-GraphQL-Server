@@ -59,7 +59,7 @@ public class GraphQLServer {
 
     private void run(final CmdArgs commandLine) {
         BioDWH2Updater.checkForUpdate("BioDWH2-GraphQL-Server",
-                "https://api.github.com/repos/BioDWH2/BioDWH2-GraphQL-Server/releases");
+                                      "https://api.github.com/repos/BioDWH2/BioDWH2-GraphQL-Server/releases");
         if (commandLine.start != null)
             startWorkspaceServer(commandLine);
         else
@@ -150,8 +150,14 @@ public class GraphQLServer {
     }
 
     private static void handleRootPost(final Context ctx) throws IOException {
-        RequestBody body = ctx.bodyValidator(RequestBody.class).getOrNull();
-        if (body == null) {
+        final RequestBody body;
+        try {
+            body = ctx.bodyValidator(RequestBody.class).get();
+        } catch (RuntimeException ex) {
+            ctx.result("");
+            return;
+        }
+        if (StringUtils.isAllBlank(body.query)) {
             ctx.result("");
             return;
         }

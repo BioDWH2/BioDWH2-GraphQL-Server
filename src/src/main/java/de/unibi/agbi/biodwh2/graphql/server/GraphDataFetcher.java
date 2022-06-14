@@ -120,9 +120,9 @@ final class GraphDataFetcher implements DataFetcher<Object> {
     private String getTypeNameOrGraphLabel(final GraphQLImplementingType type) {
         if (type instanceof GraphQLObjectType) {
             final GraphQLObjectType objectType = (GraphQLObjectType) type;
-            final GraphQLDirective directive = objectType.getDirective("GraphLabel");
+            final GraphQLAppliedDirective directive = objectType.getAppliedDirective("GraphLabel");
             if (directive != null)
-                return directive.getArgument("value").getArgumentValue().getValue().toString();
+                return directive.getArgument("value").getValue();
         }
         return type.getName();
     }

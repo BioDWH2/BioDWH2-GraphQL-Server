@@ -30,7 +30,7 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-shade-plugin</artifactId>
-                <version>3.2.4</version>
+                <version>3.3.0</version>
                 <executions>
                     <execution>
                         <phase>package</phase>
@@ -94,12 +94,12 @@
         <dependency>
             <groupId>io.javalin</groupId>
             <artifactId>javalin</artifactId>
-            <version>3.13.10</version>
+            <version>4.6.1</version>
         </dependency>
         <dependency>
             <groupId>info.picocli</groupId>
             <artifactId>picocli</artifactId>
-            <version>4.6.1</version>
+            <version>4.6.3</version>
         </dependency>
         <dependency>
             <groupId>commons-codec</groupId>
@@ -109,7 +109,7 @@
         <dependency>
             <groupId>com.graphql-java</groupId>
             <artifactId>graphql-java</artifactId>
-            <version>17.0</version>
+            <version>18.1</version>
         </dependency>
     </dependencies>
 
