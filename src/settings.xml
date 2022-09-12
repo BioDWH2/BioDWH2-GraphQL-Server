@@ -24,6 +24,13 @@
           <releases><enabled>true</enabled></releases>
           <snapshots><enabled>true</enabled></snapshots>
         </repository>
+        <repository>
+          <id>Procedures github</id>
+          <name>GitHub Apache Maven Packages</name>
+          <url>https://maven.pkg.github.com/biodwh2/biodwh2</url>
+          <releases><enabled>true</enabled></releases>
+          <snapshots><enabled>true</enabled></snapshots>
+        </repository>
       </repositories>
     </profile>
   </profiles>
@@ -31,6 +38,11 @@
   <servers>
     <server>
       <id>BioDWH2 github</id>
+      <username>${env.USERNAME}</username>
+      <password>${env.PASSWORD}</password>
+    </server>
+    <server>
+      <id>Procedures github</id>
       <username>${env.USERNAME}</username>
       <password>${env.PASSWORD}</password>
     </server>

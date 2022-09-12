@@ -92,6 +92,11 @@
             <version>0.4.4</version>
         </dependency>
         <dependency>
+            <groupId>de.unibi.agbi.biodwh2</groupId>
+            <artifactId>biodwh2-procedures</artifactId>
+            <version>0.1.2</version>
+        </dependency>
+        <dependency>
             <groupId>io.javalin</groupId>
             <artifactId>javalin</artifactId>
             <version>4.6.4</version>
