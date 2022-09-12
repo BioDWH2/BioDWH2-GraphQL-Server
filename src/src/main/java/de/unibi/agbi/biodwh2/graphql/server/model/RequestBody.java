@@ -5,5 +5,5 @@ import java.util.Map;
 public class RequestBody {
     public String query;
     public String operationName;
-    public Map<String, String> variables;
+    public Map<String, Object> variables;
 }

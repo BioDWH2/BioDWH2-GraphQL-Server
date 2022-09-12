@@ -79,15 +79,15 @@ public class GraphQLServer {
         final Graph graph = new Graph(Paths.get(workspacePath, "sources", DATABASE_FILE_NAME), true, true);
         updateSchemaIfNecessary(graphqlPath, graph, workspaceGraphHash);
         LOGGER.info("Setup GraphQL...");
-        SchemaParser schemaParser = new SchemaParser();
-        File schemaFile = Paths.get(graphqlPath.toString(), SCHEMA_FILE_NAME).toFile();
-        TypeDefinitionRegistry typeRegistry = schemaParser.parse(schemaFile);
-        SchemaGenerator schemaGenerator = new SchemaGenerator();
-        RuntimeWiring wiring = buildRuntimeWiring(graph);
-        GraphQLSchema schema = schemaGenerator.makeExecutableSchema(typeRegistry, wiring);
+        final SchemaParser schemaParser = new SchemaParser();
+        final File schemaFile = Paths.get(graphqlPath.toString(), SCHEMA_FILE_NAME).toFile();
+        final TypeDefinitionRegistry typeRegistry = schemaParser.parse(schemaFile);
+        final SchemaGenerator schemaGenerator = new SchemaGenerator();
+        final RuntimeWiring wiring = buildRuntimeWiring(graph);
+        final GraphQLSchema schema = schemaGenerator.makeExecutableSchema(typeRegistry, wiring);
         graphQL = GraphQL.newGraphQL(schema).build();
         LOGGER.info("Start server...");
-        Javalin app = Javalin.create(this::configureJavalin).start(port);
+        final Javalin app = Javalin.create(this::configureJavalin).start(port);
         app.post("/", GraphQLServer::handleRootPost);
         openBrowser(port);
     }
@@ -163,9 +163,15 @@ public class GraphQLServer {
         }
         final String query = Arrays.stream(body.query.split("\n")).filter(l -> !isLineEmptyOrComment(l)).collect(
                 Collectors.joining("\n"));
-        ExecutionInput executionInput = ExecutionInput.newExecutionInput().query(query).build();
-        ExecutionResult executionResult = graphQL.execute(executionInput);
-        ObjectMapper objectMapper = new ObjectMapper();
+        final ExecutionInput.Builder builder = ExecutionInput.newExecutionInput();
+        builder.query(query);
+        if (body.operationName != null)
+            builder.operationName(body.operationName);
+        if (body.variables != null)
+            builder.variables(body.variables);
+        final ExecutionInput executionInput = builder.build();
+        final ExecutionResult executionResult = graphQL.execute(executionInput);
+        final ObjectMapper objectMapper = new ObjectMapper();
         ctx.result(objectMapper.writeValueAsString(executionResult.toSpecification()));
     }
 

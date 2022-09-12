@@ -39,71 +39,92 @@ final class GraphDataFetcher implements DataFetcher<Object> {
         final Field field = environment.getMergedField().getSingleField();
         final GraphQLImplementingType implementingType = (GraphQLImplementingType) unwrapType(
                 environment.getFieldType());
-        return getObject(schema, implementingType, field.getArguments(), field.getSelectionSet(), null, null);
+        final Map<String, Comparable<?>> variables = new HashMap<>();
+        for (final VariableDefinition definition : environment.getOperationDefinition().getVariableDefinitions()) {
+            Comparable<?> value;
+            if (environment.getVariables().containsKey(definition.getName()))
+                value = (Comparable<?>) environment.getVariables().get(definition.getName());
+            else
+                value = convertGraphQLValue(null, definition.getDefaultValue(), variables);
+            variables.put(definition.getName(), value);
+        }
+        return getObject(schema, implementingType, field.getArguments(), field.getSelectionSet(), null, null,
+                         variables);
     }
 
     private Object getObject(final GraphQLSchema schema, final GraphQLImplementingType type,
                              final List<Argument> arguments, final SelectionSet selectionSet, final String filterKey,
-                             final Comparable<?> filterValue) {
-        final Map<String, Comparable<?>> argumentsMap = convertArgumentsForGraph(arguments);
+                             final Comparable<?> filterValue, final Map<String, Comparable<?>> variables) {
+        final Map<String, Comparable<?>> argumentsMap = convertArgumentsForGraph(arguments, variables);
         if (filterKey != null && filterValue != null)
             argumentsMap.put(filterKey, filterValue);
         if (typeHasInterface(type, "Node")) {
             final List<Object> result = new ArrayList<>();
             for (final Node node : graph.findNodes(getTypeNameOrGraphLabel(type), argumentsMap))
-                result.add(selectResults(schema, selectionSet, node));
+                result.add(selectResults(schema, selectionSet, node, variables));
             return result;
         } else if (typeHasInterface(type, "Edge")) {
             final List<Object> result = new ArrayList<>();
             for (final Edge edge : graph.findEdges(getTypeNameOrGraphLabel(type), argumentsMap))
-                result.add(selectResults(schema, selectionSet, edge));
+                result.add(selectResults(schema, selectionSet, edge, variables));
             return result;
         } else if (type instanceof GraphQLInterfaceType) {
             if ("Node".equals(type.getName())) {
                 if (argumentsMap.size() == 1 && argumentsMap.containsKey(Node.ID_FIELD)) {
                     final long id = getLongProperty(argumentsMap, Node.ID_FIELD);
-                    return selectResults(schema, selectionSet, graph.getNode(id));
+                    return selectResults(schema, selectionSet, graph.getNode(id), variables);
                 }
                 final List<Object> result = new ArrayList<>();
                 for (final Node node : graph.findNodes(argumentsMap))
-                    result.add(selectResults(schema, selectionSet, node));
+                    result.add(selectResults(schema, selectionSet, node, variables));
                 return result;
             } else if ("Edge".equals(type.getName())) {
                 if (argumentsMap.size() == 1 && argumentsMap.containsKey(Edge.ID_FIELD)) {
                     final long id = getLongProperty(argumentsMap, Edge.ID_FIELD);
-                    return selectResults(schema, selectionSet, graph.getEdge(id));
+                    return selectResults(schema, selectionSet, graph.getEdge(id), variables);
                 }
                 final List<Object> result = new ArrayList<>();
                 for (final Edge edge : graph.findEdges(argumentsMap))
-                    result.add(selectResults(schema, selectionSet, edge));
+                    result.add(selectResults(schema, selectionSet, edge, variables));
                 return result;
             }
         }
         return null;
     }
 
-    private Map<String, Comparable<?>> convertArgumentsForGraph(final List<Argument> arguments) {
+    private Map<String, Comparable<?>> convertArgumentsForGraph(final List<Argument> arguments,
+                                                                final Map<String, Comparable<?>> variables) {
         final Map<String, Comparable<?>> result = new HashMap<>();
         for (final Argument argument : arguments) {
             final String key = translatePropertyKey(argument.getName());
-            final Value<?> value = argument.getValue();
-            if (value instanceof StringValue)
-                result.put(key, ((StringValue) value).getValue());
-            else if (value instanceof BooleanValue)
-                result.put(key, ((BooleanValue) value).isValue());
-            else if (value instanceof FloatValue)
-                result.put(key, ((FloatValue) value).getValue());
-            else if (value instanceof IntValue) {
-                final BigInteger integer = ((IntValue) value).getValue();
-                if (integer.bitCount() > Integer.SIZE || "__id".equals(key) || "__to_id".equals(key) ||
-                    "__from_id".equals(key))
-                    result.put(key, integer.longValue());
-                else
-                    result.put(key, integer.intValue());
-            } else if (LOGGER.isErrorEnabled())
-                LOGGER.error("Failed to convert argument '" + argument + "' to graph argument");
+            result.put(key, convertGraphQLValue(key, argument.getValue(), variables));
         }
         return result;
+    }
+
+    private Comparable<?> convertGraphQLValue(final String key, final Value<?> value,
+                                              final Map<String, Comparable<?>> variables) {
+        if (value == null)
+            return null;
+        if (value instanceof StringValue)
+            return ((StringValue) value).getValue();
+        if (value instanceof BooleanValue)
+            return ((BooleanValue) value).isValue();
+        if (value instanceof FloatValue)
+            return ((FloatValue) value).getValue();
+        if (value instanceof IntValue) {
+            final BigInteger integer = ((IntValue) value).getValue();
+            if (integer.bitCount() > Integer.SIZE || "__id".equals(key) || "__to_id".equals(key) || "__from_id".equals(
+                    key)) {
+                return integer.longValue();
+            }
+            return integer.intValue();
+        }
+        if (value instanceof VariableReference)
+            return variables.get(((VariableReference) value).getName());
+        if (LOGGER.isErrorEnabled())
+            LOGGER.error("Failed to convert value '" + value + "' to graph argument");
+        return null;
     }
 
     private String translatePropertyKey(final String key) {
@@ -128,13 +149,13 @@ final class GraphDataFetcher implements DataFetcher<Object> {
     }
 
     private Map<String, Object> selectResults(final GraphQLSchema schema, final SelectionSet selectionSet,
-                                              final MVStoreModel model) {
+                                              final MVStoreModel model, final Map<String, Comparable<?>> variables) {
         if (model == null)
             return null;
         final Map<String, Object> result = new HashMap<>();
         result.put("__typename", getFixedLabel(model));
         for (final Selection<?> selection : selectionSet.getSelections())
-            selectResult(schema, selection, model, result);
+            selectResult(schema, selection, model, result, variables);
         return result;
     }
 
@@ -143,17 +164,17 @@ final class GraphDataFetcher implements DataFetcher<Object> {
     }
 
     private void selectResult(final GraphQLSchema schema, final Selection<?> selection, final MVStoreModel model,
-                              final Map<String, Object> result) {
+                              final Map<String, Object> result, final Map<String, Comparable<?>> variables) {
         if (selection instanceof Field)
-            selectFieldResult(schema, (Field) selection, model, result);
+            selectFieldResult(schema, (Field) selection, model, result, variables);
         else if (selection instanceof InlineFragment)
-            selectInlineFragmentResult(schema, (InlineFragment) selection, model, result);
+            selectInlineFragmentResult(schema, (InlineFragment) selection, model, result, variables);
         else if (LOGGER.isErrorEnabled())
             LOGGER.error("Failed to select results for selection '" + selection + "'");
     }
 
     private void selectFieldResult(final GraphQLSchema schema, final Field field, final MVStoreModel model,
-                                   final Map<String, Object> result) {
+                                   final Map<String, Object> result, final Map<String, Comparable<?>> variables) {
         if ("__typename".equals(field.getName()))
             result.put(field.getResultKey(), getFixedLabel(model));
         else {
@@ -167,13 +188,13 @@ final class GraphDataFetcher implements DataFetcher<Object> {
                 if (model instanceof Node) {
                     result.put(field.getResultKey(),
                                getObject(schema, implementingType, field.getArguments(), field.getSelectionSet(),
-                                         Edge.FROM_ID_FIELD, model.getId()));
+                                         Edge.FROM_ID_FIELD, model.getId(), variables));
                 } else if (model instanceof Edge) {
                     final Edge edge = (Edge) model;
                     final long targetId = "_to".equals(field.getName()) ? edge.getToId() : edge.getFromId();
                     result.put(field.getResultKey(),
                                getObject(schema, implementingType, field.getArguments(), field.getSelectionSet(),
-                                         Node.ID_FIELD, targetId));
+                                         Node.ID_FIELD, targetId, variables));
                 }
             }
         }
@@ -186,9 +207,11 @@ final class GraphDataFetcher implements DataFetcher<Object> {
     }
 
     private void selectInlineFragmentResult(final GraphQLSchema schema, final InlineFragment fragment,
-                                            final MVStoreModel model, final Map<String, Object> result) {
+                                            final MVStoreModel model, final Map<String, Object> result,
+                                            final Map<String, Comparable<?>> variables) {
         if (fragment.getTypeCondition().getName().equals(getFixedLabel(model))) {
-            final Map<String, Object> fragmentResults = selectResults(schema, fragment.getSelectionSet(), model);
+            final Map<String, Object> fragmentResults = selectResults(schema, fragment.getSelectionSet(), model,
+                                                                      variables);
             for (final String key : fragmentResults.keySet())
                 result.put(key, fragmentResults.get(key));
         }
