@@ -18,6 +18,7 @@ import java.util.Map;
 
 final class GraphDataFetcher implements DataFetcher<Object> {
     private static final Logger LOGGER = LoggerFactory.getLogger(GraphDataFetcher.class);
+    private static final String LABEL_FIELD = "__label";
 
     private final Graph graph;
 
@@ -160,7 +161,7 @@ final class GraphDataFetcher implements DataFetcher<Object> {
     }
 
     private String getFixedLabel(final MVStoreModel model) {
-        return GraphSchema.BaseType.fixLabel(model.getProperty(Node.LABEL_FIELD));
+        return GraphSchema.BaseType.fixLabel(model.getProperty(LABEL_FIELD));
     }
 
     private void selectResult(final GraphQLSchema schema, final Selection<?> selection, final MVStoreModel model,
