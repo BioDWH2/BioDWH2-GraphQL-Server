@@ -25,7 +25,6 @@ import picocli.CommandLine;
 
 import java.awt.*;
 import java.io.File;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -75,9 +74,8 @@ public class GraphQLServer {
         final Path graphqlPath = Paths.get(workspacePath, "graphql");
         final int port = commandLine.port != null ? commandLine.port : 8090;
         LOGGER.info("Load database...");
-        final String workspaceGraphHash = getWorkspaceGraphHash(workspacePath);
         final Graph graph = new Graph(Paths.get(workspacePath, "sources", DATABASE_FILE_NAME), true, true);
-        updateSchemaIfNecessary(graphqlPath, graph, workspaceGraphHash);
+        updateSchemaIfNecessary(graphqlPath, graph);
         LOGGER.info("Setup GraphQL...");
         final SchemaParser schemaParser = new SchemaParser();
         final File schemaFile = Paths.get(graphqlPath.toString(), SCHEMA_FILE_NAME).toFile();
@@ -103,36 +101,15 @@ public class GraphQLServer {
         return true;
     }
 
-    private String getWorkspaceGraphHash(final String workspacePath) {
-        try {
-            return HashUtils.getMd5HashFromFile(Paths.get(workspacePath, "sources", DATABASE_FILE_NAME).toString());
-        } catch (IOException e) {
-            if (LOGGER.isWarnEnabled())
-                LOGGER.warn("Failed to check hash of workspace mapped graph", e);
-        }
-        return "";
-    }
-
-    private void updateSchemaIfNecessary(final Path graphqlPath, final Graph graph, final String workspaceGraphHash) {
+    private void updateSchemaIfNecessary(final Path graphqlPath, final Graph graph) {
         try {
             if (Files.notExists(graphqlPath))
                 Files.createDirectory(graphqlPath);
-            final Path hashFilePath = Paths.get(graphqlPath.toString(), "checksum.txt");
             final Path schemaFilePath = Paths.get(graphqlPath.toString(), SCHEMA_FILE_NAME);
-            boolean upToDate = false;
-            if (Files.exists(hashFilePath) && Files.exists(schemaFilePath)) {
-                final String storedHash = new String(Files.readAllBytes(hashFilePath)).trim();
-                upToDate = workspaceGraphHash.equals(storedHash);
-            }
-            if (!upToDate) {
-                if (LOGGER.isInfoEnabled())
-                    LOGGER.info("Regenerating GraphQL schema...");
-                final GraphSchema schema = new GraphSchema(graph);
-                new GraphQLSchemaWriter(schema).save(schemaFilePath.toString());
-                final FileWriter writer = new FileWriter(hashFilePath.toFile());
-                writer.write(workspaceGraphHash);
-                writer.close();
-            }
+            if (LOGGER.isInfoEnabled())
+                LOGGER.info("Generating GraphQL schema...");
+            final GraphSchema schema = new GraphSchema(graph);
+            new GraphQLSchemaWriter(schema).save(schemaFilePath.toString());
         } catch (IOException e) {
             if (LOGGER.isWarnEnabled())
                 LOGGER.warn("Failed to check hash of workspace mapped graph", e);

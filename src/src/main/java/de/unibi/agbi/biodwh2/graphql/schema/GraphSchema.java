@@ -73,10 +73,8 @@ public class GraphSchema {
 
     private void loadEdgeType(final Graph graph, final Edge edge) {
         final EdgeType type = edgeTypes.get(edge.getLabel());
-        final String fromLabel = graph.getNode(edge.getFromId()).getLabel();
-        final String toLabel = graph.getNode(edge.getToId()).getLabel();
-        type.fromLabels.add(fromLabel);
-        type.toLabels.add(toLabel);
+        type.fromLabels.add(graph.getNodeLabel(edge.getFromId()));
+        type.toLabels.add(graph.getNodeLabel(edge.getToId()));
     }
 
     public NodeType[] getNodeTypes() {
