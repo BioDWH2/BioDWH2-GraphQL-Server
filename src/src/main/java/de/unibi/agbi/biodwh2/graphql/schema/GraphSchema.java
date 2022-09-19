@@ -29,18 +29,18 @@ public class GraphSchema {
         final Set<String> toLabels = new HashSet<>();
     }
 
-    private final Map<String, NodeType> nodeTypes;
-    private final Map<String, EdgeType> edgeTypes;
+    private final Map<String, NodeType> nodeTypes = new HashMap<>();
+    private final Map<String, EdgeType> edgeTypes = new HashMap<>();
 
     public GraphSchema(final Graph graph) {
-        nodeTypes = new HashMap<>();
-        edgeTypes = new HashMap<>();
         loadNodeTypes(graph);
         loadEdgeTypes(graph);
     }
 
     private void loadNodeTypes(final Graph graph) {
         for (final String label : graph.getNodeLabels()) {
+            if (graph.getNumberOfNodes(label) == 0)
+                continue;
             final NodeType type = new NodeType();
             type.label = label;
             nodeTypes.put(label, type);
@@ -60,6 +60,8 @@ public class GraphSchema {
 
     private void loadEdgeTypes(final Graph graph) {
         for (final String label : graph.getEdgeLabels()) {
+            if (graph.getNumberOfEdges(label) == 0)
+                continue;
             final EdgeType type = new EdgeType();
             type.label = label;
             edgeTypes.put(label, type);
