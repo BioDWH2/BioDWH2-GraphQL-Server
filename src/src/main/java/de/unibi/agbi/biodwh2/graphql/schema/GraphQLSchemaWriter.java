@@ -42,8 +42,9 @@ public final class GraphQLSchemaWriter extends SchemaWriter {
 
     private void writeDirectives(final BufferedWriter writer) throws IOException {
         writeLine(writer, "# Primary directive definitions");
-        writeLine(writer, "directive @GraphLabel(value: String) on OBJECT");
-        writeLine(writer, "directive @GraphProperty(value: String) on FIELD_DEFINITION");
+        writeLine(writer, "directive @GraphLabel(value: String!) on OBJECT");
+        writeLine(writer, "directive @GraphProperty(value: String!) on FIELD_DEFINITION");
+        writeLine(writer, "directive @Limit(count: Int, skip: Int) on FIELD");
         writer.newLine();
     }
 

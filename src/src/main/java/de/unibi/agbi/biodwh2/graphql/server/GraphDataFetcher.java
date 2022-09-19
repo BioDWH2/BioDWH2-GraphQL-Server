@@ -7,6 +7,7 @@ import de.unibi.agbi.biodwh2.core.model.graph.Node;
 import de.unibi.agbi.biodwh2.graphql.schema.GraphSchema;
 import graphql.language.*;
 import graphql.schema.*;
+import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -15,6 +16,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 final class GraphDataFetcher implements DataFetcher<Object> {
     private static final Logger LOGGER = LoggerFactory.getLogger(GraphDataFetcher.class);
@@ -48,26 +50,27 @@ final class GraphDataFetcher implements DataFetcher<Object> {
                 value = convertGraphQLValue(null, definition.getDefaultValue(), variables);
             variables.put(definition.getName(), value);
         }
-        return getObject(schema, implementingType, field.getArguments(), field.getSelectionSet(), null, null,
-                         variables);
+        return getObject(schema, implementingType, field, null, null, variables);
     }
 
-    private Object getObject(final GraphQLSchema schema, final GraphQLImplementingType type,
-                             final List<Argument> arguments, final SelectionSet selectionSet, final String filterKey,
-                             final Comparable<?> filterValue, final Map<String, Comparable<?>> variables) {
-        final Map<String, Comparable<?>> argumentsMap = convertArgumentsForGraph(arguments, variables);
+    private Object getObject(final GraphQLSchema schema, final GraphQLImplementingType type, final Field field,
+                             final String filterKey, final Comparable<?> filterValue,
+                             final Map<String, Comparable<?>> variables) {
+        final List<Directive> directives = field.getDirectives();
+        final SelectionSet selectionSet = field.getSelectionSet();
+        final Map<String, Comparable<?>> argumentsMap = convertArgumentsForGraph(field.getArguments(), variables);
         if (filterKey != null && filterValue != null)
             argumentsMap.put(filterKey, filterValue);
         if (typeHasInterface(type, "Node")) {
             final List<Object> result = new ArrayList<>();
             for (final Node node : graph.findNodes(getTypeNameOrGraphLabel(type), argumentsMap))
                 result.add(selectResults(schema, selectionSet, node, variables));
-            return result;
+            return applyLimitDirective(variables, directives, result);
         } else if (typeHasInterface(type, "Edge")) {
             final List<Object> result = new ArrayList<>();
             for (final Edge edge : graph.findEdges(getTypeNameOrGraphLabel(type), argumentsMap))
                 result.add(selectResults(schema, selectionSet, edge, variables));
-            return result;
+            return applyLimitDirective(variables, directives, result);
         } else if (type instanceof GraphQLInterfaceType) {
             if ("Node".equals(type.getName())) {
                 if (argumentsMap.size() == 1 && argumentsMap.containsKey(Node.ID_FIELD)) {
@@ -77,7 +80,7 @@ final class GraphDataFetcher implements DataFetcher<Object> {
                 final List<Object> result = new ArrayList<>();
                 for (final Node node : graph.findNodes(argumentsMap))
                     result.add(selectResults(schema, selectionSet, node, variables));
-                return result;
+                return applyLimitDirective(variables, directives, result);
             } else if ("Edge".equals(type.getName())) {
                 if (argumentsMap.size() == 1 && argumentsMap.containsKey(Edge.ID_FIELD)) {
                     final long id = getLongProperty(argumentsMap, Edge.ID_FIELD);
@@ -86,10 +89,26 @@ final class GraphDataFetcher implements DataFetcher<Object> {
                 final List<Object> result = new ArrayList<>();
                 for (final Edge edge : graph.findEdges(argumentsMap))
                     result.add(selectResults(schema, selectionSet, edge, variables));
-                return result;
+                return applyLimitDirective(variables, directives, result);
             }
         }
         return null;
+    }
+
+    private List<Object> applyLimitDirective(final Map<String, Comparable<?>> variables,
+                                             final List<Directive> directives, List<Object> values) {
+        for (final Directive directive : directives) {
+            if ("Limit".equals(directive.getName())) {
+                final Argument skipArg = directive.getArgument("skip");
+                final Argument countArg = directive.getArgument("count");
+                final int skip = skipArg != null ? (Integer) convertGraphQLValue("skip", skipArg.getValue(),
+                                                                                 variables) : 0;
+                final int count = countArg != null ? (Integer) convertGraphQLValue("count", countArg.getValue(),
+                                                                                   variables) : values.size();
+                return values.stream().skip(skip).limit(count).collect(Collectors.toList());
+            }
+        }
+        return values;
     }
 
     private Map<String, Comparable<?>> convertArgumentsForGraph(final List<Argument> arguments,
@@ -120,8 +139,16 @@ final class GraphDataFetcher implements DataFetcher<Object> {
             }
             return integer.intValue();
         }
-        if (value instanceof VariableReference)
-            return variables.get(((VariableReference) value).getName());
+        if (value instanceof VariableReference) {
+            final Comparable<?> variableValue = variables.get(((VariableReference) value).getName());
+            if (MVStoreModel.ID_FIELD.equals(key)) {
+                if (variableValue instanceof Integer)
+                    return (long) (Integer) variableValue;
+                if (variableValue instanceof String && StringUtils.isNumeric((String) variableValue))
+                    return Long.parseLong((String) variableValue);
+            }
+            return variableValue;
+        }
         if (LOGGER.isErrorEnabled())
             LOGGER.error("Failed to convert value '" + value + "' to graph argument");
         return null;
@@ -191,14 +218,13 @@ final class GraphDataFetcher implements DataFetcher<Object> {
                 final GraphQLImplementingType implementingType = (GraphQLImplementingType) fieldType;
                 if (model instanceof Node) {
                     result.put(field.getResultKey(),
-                               getObject(schema, implementingType, field.getArguments(), field.getSelectionSet(),
-                                         Edge.FROM_ID_FIELD, model.getId(), variables));
+                               getObject(schema, implementingType, field, Edge.FROM_ID_FIELD, model.getId(),
+                                         variables));
                 } else if (model instanceof Edge) {
                     final Edge edge = (Edge) model;
                     final long targetId = "_to".equals(field.getName()) ? edge.getToId() : edge.getFromId();
                     result.put(field.getResultKey(),
-                               getObject(schema, implementingType, field.getArguments(), field.getSelectionSet(),
-                                         Node.ID_FIELD, targetId, variables));
+                               getObject(schema, implementingType, field, Node.ID_FIELD, targetId, variables));
                 }
             }
         }
