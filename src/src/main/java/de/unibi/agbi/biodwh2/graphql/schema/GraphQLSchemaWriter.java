@@ -81,6 +81,7 @@ public final class GraphQLSchemaWriter extends SchemaWriter {
         writeLine(writer, "type QueryType {");
         writeLine(writer, "  _node(_id: ID!): Node");
         writeLine(writer, "  _edge(_id: ID!): Edge");
+        writeLine(writer, "  _nodes(_label: String): [Node!]!");
         writeLine(writer, "  _edges(_to_id: ID, _from_id: ID, _label: String): [Edge!]!");
         writer.newLine();
         writeLine(writer, "  # Node query endpoints");
