@@ -10,6 +10,7 @@ import de.unibi.agbi.biodwh2.graphql.server.model.RequestBody;
 import graphql.ExecutionInput;
 import graphql.ExecutionResult;
 import graphql.GraphQL;
+import graphql.scalars.ExtendedScalars;
 import graphql.schema.GraphQLSchema;
 import graphql.schema.idl.RuntimeWiring;
 import graphql.schema.idl.SchemaGenerator;
@@ -117,7 +118,8 @@ public class GraphQLServer {
     }
 
     private static RuntimeWiring buildRuntimeWiring(final Graph graph) {
-        return RuntimeWiring.newRuntimeWiring().wiringFactory(new GraphWiringFactory(graph)).build();
+        return RuntimeWiring.newRuntimeWiring().wiringFactory(new GraphWiringFactory(graph)).scalar(
+                ExtendedScalars.Json).scalar(ExtendedScalars.Object).scalar(ExtendedScalars.GraphQLLong).build();
     }
 
     private void configureJavalin(final JavalinConfig config) {

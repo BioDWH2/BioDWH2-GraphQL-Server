@@ -2,6 +2,7 @@ package de.unibi.agbi.biodwh2.graphql.server;
 
 import de.unibi.agbi.biodwh2.core.model.graph.Graph;
 import graphql.Scalars;
+import graphql.scalars.ExtendedScalars;
 import graphql.schema.DataFetcher;
 import graphql.schema.DataFetcherFactory;
 import graphql.schema.GraphQLScalarType;
@@ -26,6 +27,14 @@ final class GraphWiringFactory implements WiringFactory {
 
     @Override
     public GraphQLScalarType getScalar(final ScalarWiringEnvironment environment) {
+        // Extended scalars
+        if (environment.getScalarTypeDefinition().getName().equals(ExtendedScalars.Json.getName()))
+            return ExtendedScalars.Json;
+        if (environment.getScalarTypeDefinition().getName().equals(ExtendedScalars.Object.getName()))
+            return ExtendedScalars.Object;
+        if (environment.getScalarTypeDefinition().getName().equals(ExtendedScalars.GraphQLLong.getName()))
+            return ExtendedScalars.GraphQLLong;
+        // Standard scalars
         if (environment.getScalarTypeDefinition().getName().equals(Scalars.GraphQLInt.getName()))
             return Scalars.GraphQLInt;
         if (environment.getScalarTypeDefinition().getName().equals(Scalars.GraphQLFloat.getName()))
