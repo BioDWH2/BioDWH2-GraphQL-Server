@@ -133,8 +133,8 @@ final class GraphDataFetcher implements DataFetcher<Object> {
             return ((FloatValue) value).getValue();
         if (value instanceof IntValue) {
             final BigInteger integer = ((IntValue) value).getValue();
-            if (integer.bitCount() > Integer.SIZE || "__id".equals(key) || "__to_id".equals(key) || "__from_id".equals(
-                    key)) {
+            if (integer.longValue() > Integer.MAX_VALUE || integer.longValue() < Integer.MIN_VALUE || "__id".equals(
+                    key) || "__to_id".equals(key) || "__from_id".equals(key)) {
                 return integer.longValue();
             }
             return integer.intValue();
