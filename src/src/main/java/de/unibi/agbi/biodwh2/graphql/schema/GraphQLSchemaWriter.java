@@ -27,6 +27,7 @@ public final class GraphQLSchemaWriter extends SchemaWriter {
     }
 
     private void save(final BufferedWriter writer) throws IOException {
+        writeScalars(writer);
         writeDirectives(writer);
         writeInterfaces(writer);
         writeMainSchema(writer);
@@ -38,6 +39,14 @@ public final class GraphQLSchemaWriter extends SchemaWriter {
         writeLine(writer, "# Edge type definitions");
         for (final GraphSchema.EdgeType type : schema.getEdgeTypes())
             writeEdgeType(writer, type);
+    }
+
+    private void writeScalars(final BufferedWriter writer) throws IOException {
+        writeLine(writer, "# Extended scalar definitions");
+        writeLine(writer, "scalar JSON");
+        writeLine(writer, "scalar Object");
+        writeLine(writer, "scalar Long");
+        writer.newLine();
     }
 
     private void writeDirectives(final BufferedWriter writer) throws IOException {
