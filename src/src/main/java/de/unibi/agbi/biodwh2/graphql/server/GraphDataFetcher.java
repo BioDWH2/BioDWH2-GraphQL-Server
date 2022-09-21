@@ -5,6 +5,8 @@ import de.unibi.agbi.biodwh2.core.model.graph.Edge;
 import de.unibi.agbi.biodwh2.core.model.graph.Graph;
 import de.unibi.agbi.biodwh2.core.model.graph.Node;
 import de.unibi.agbi.biodwh2.graphql.schema.GraphSchema;
+import de.unibi.agbi.biodwh2.procedures.Registry;
+import de.unibi.agbi.biodwh2.procedures.ResultSet;
 import graphql.language.*;
 import graphql.schema.*;
 import org.apache.commons.lang3.StringUtils;
@@ -91,6 +93,8 @@ final class GraphDataFetcher implements DataFetcher<Object> {
                     result.add(selectResults(schema, selectionSet, edge, variables));
                 return applyLimitDirective(variables, directives, result);
             }
+        } else if (typeHasInterface(type, "ProcedureContainer")) {
+            return selectProcedureResults(schema, selectionSet, type, variables);
         }
         return null;
     }
@@ -252,5 +256,82 @@ final class GraphDataFetcher implements DataFetcher<Object> {
         if (object instanceof BigInteger)
             return ((BigInteger) object).longValue();
         return (long) object;
+    }
+
+    private Object selectProcedureResults(final GraphQLSchema schema, final SelectionSet selectionSet,
+                                          final GraphQLImplementingType type,
+                                          final Map<String, Comparable<?>> variables) {
+        final Map<String, Object> result = new HashMap<>();
+        for (final Selection<?> selection : selectionSet.getSelections()) {
+            if (selection instanceof Field) {
+                final Field selectionField = (Field) selection;
+                if ("__typename".equals(selectionField.getName()) || "_id".equals(selectionField.getName()))
+                    result.put(selectionField.getName(), type.getName());
+                else {
+                    final GraphQLFieldDefinition definition = type.getFieldDefinition(selectionField.getName());
+                    final GraphQLType fieldType = unwrapType(definition.getType());
+                    if (fieldType instanceof GraphQLImplementingType) {
+                        final GraphQLImplementingType implementingType = (GraphQLImplementingType) fieldType;
+                        if (typeHasInterface(implementingType, "ProcedureContainer")) {
+                            result.put(selectionField.getName(),
+                                       selectProcedureResults(schema, selectionField.getSelectionSet(),
+                                                              implementingType, variables));
+                        }
+                    } else {
+                        result.put(selectionField.getName(),
+                                   selectProcedureCallResults(schema, selectionField, definition, variables));
+                    }
+                }
+            } else if (selection instanceof InlineFragment) {
+                final InlineFragment selectionFragment = (InlineFragment) selection;
+                System.out.println(selectionFragment);
+            } else if (LOGGER.isErrorEnabled())
+                LOGGER.error("Failed to select results for selection '" + selection + "'");
+        }
+        return result;
+    }
+
+    private Object selectProcedureCallResults(final GraphQLSchema schema, final Field selectionField,
+                                              final GraphQLFieldDefinition definition,
+                                              final Map<String, Comparable<?>> variables) {
+        final GraphQLDirective directive = definition.getDirectivesByName().get("Procedure");
+        if (directive != null) {
+            final String path = directive.getArgument("path").toAppliedArgument().getValue();
+            final Registry.ProcedureDefinition procedure = Registry.getInstance().getProcedure(path);
+            final Object[] parameters = convertArgumentsForProcedure(selectionField.getArguments(), variables,
+                                                                     procedure);
+            final ResultSet results = Registry.getInstance().callProcedure(path, graph, parameters);
+            final Map<String, Object> result = new HashMap<>();
+            result.put("columns", results.getColumns());
+            final Object[][] rows = new Object[results.getRowCount()][];
+            result.put("rows", rows);
+            for (int row = 0; row < rows.length; row++) {
+                rows[row] = new Object[results.getColumnCount()];
+                for (int col = 0; col < rows[row].length; col++)
+                    rows[row][col] = results.getRow(row).getValue(col);
+            }
+            return result;
+        }
+        return null;
+    }
+
+    private Object[] convertArgumentsForProcedure(final List<Argument> arguments,
+                                                  final Map<String, Comparable<?>> variables,
+                                                  final Registry.ProcedureDefinition procedure) {
+        final Object[] result = new Object[arguments.size()];
+        for (int i = 0; i < result.length; i++) {
+            final Comparable<?> value = convertGraphQLValue(arguments.get(i).getName(), arguments.get(i).getValue(),
+                                                            variables);
+            result[i] = value;
+            switch (procedure.argumentTypes[i]) {
+                case Node:
+                    result[i] = graph.getNode((long) result[i]);
+                    break;
+                case Edge:
+                    result[i] = graph.getEdgeLabel((long) result[i]);
+                    break;
+            }
+        }
+        return result;
     }
 }

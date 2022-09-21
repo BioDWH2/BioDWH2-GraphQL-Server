@@ -1,11 +1,20 @@
 package de.unibi.agbi.biodwh2.graphql.schema;
 
 import de.unibi.agbi.biodwh2.core.lang.Type;
+import de.unibi.agbi.biodwh2.core.text.TextUtils;
+import de.unibi.agbi.biodwh2.procedures.Registry;
+import org.apache.commons.lang3.StringUtils;
 
-import java.io.*;
+import java.io.BufferedWriter;
+import java.io.IOException;
+import java.io.OutputStream;
+import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -32,6 +41,7 @@ public final class GraphQLSchemaWriter extends SchemaWriter {
         writeInterfaces(writer);
         writeMainSchema(writer);
         writeQueryType(writer);
+        writeProcedures(writer);
         writeLine(writer, "# Node type definitions");
         for (final GraphSchema.NodeType type : schema.getNodeTypes())
             writeNodeType(writer, schema, type);
@@ -53,12 +63,13 @@ public final class GraphQLSchemaWriter extends SchemaWriter {
         writeLine(writer, "# Primary directive definitions");
         writeLine(writer, "directive @GraphLabel(value: String!) on OBJECT");
         writeLine(writer, "directive @GraphProperty(value: String!) on FIELD_DEFINITION");
+        writeLine(writer, "directive @Procedure(path: String!) on FIELD_DEFINITION");
         writeLine(writer, "directive @Limit(count: Int, skip: Int) on FIELD");
         writer.newLine();
     }
 
     private void writeInterfaces(final BufferedWriter writer) throws IOException {
-        writeLine(writer, "# Primary node and edge interface definitions");
+        writeLine(writer, "# Primary interface definitions");
         writeLine(writer, "interface Node {");
         writeLine(writer, "  _id: ID!");
         writeLine(writer, "  _label: String!");
@@ -71,6 +82,9 @@ public final class GraphQLSchemaWriter extends SchemaWriter {
         writeLine(writer, "  _from: Node!");
         writeLine(writer, "  _to_id: ID!");
         writeLine(writer, "  _to: Node!");
+        writeLine(writer, "}");
+        writeLine(writer, "interface ProcedureContainer {");
+        writeLine(writer, "  _id: ID!");
         writeLine(writer, "}");
         writer.newLine();
     }
@@ -92,6 +106,7 @@ public final class GraphQLSchemaWriter extends SchemaWriter {
         writeLine(writer, "  _edge(_id: ID!): Edge");
         writeLine(writer, "  _nodes(_label: String): [Node!]!");
         writeLine(writer, "  _edges(_to_id: ID, _from_id: ID, _label: String): [Edge!]!");
+        writeLine(writer, "  _procedures: Procedures!");
         writer.newLine();
         writeLine(writer, "  # Node query endpoints");
         for (final GraphSchema.BaseType type : schema.getNodeTypes())
@@ -140,6 +155,87 @@ public final class GraphQLSchemaWriter extends SchemaWriter {
         return "String";
     }
 
+    private void writeProcedures(final BufferedWriter writer) throws IOException {
+        writeLine(writer, "enum EdgeDirection {");
+        writeLine(writer, "  ANY");
+        writeLine(writer, "  FORWARD");
+        writeLine(writer, "  BACKWARD");
+        writeLine(writer, "}");
+        writer.newLine();
+        final Registry.ProcedureDefinition[] definitions = Registry.getInstance().getProcedures();
+        final Map<String, ProceduresPath> procedurePathHierarchy = new HashMap<>();
+        procedurePathHierarchy.put("", new ProceduresPath(""));
+        for (final Registry.ProcedureDefinition definition : definitions) {
+            final String[] parts = StringUtils.split(definition.name, '.');
+            final StringBuilder parentPath = new StringBuilder();
+            for (int i = 0; i < parts.length - 1; i++) {
+                if (!procedurePathHierarchy.get(parentPath.toString()).childPaths.contains(parts[i]))
+                    procedurePathHierarchy.get(parentPath.toString()).childPaths.add(parts[i]);
+                if (i > 0)
+                    parentPath.append('.');
+                parentPath.append(parts[i]);
+                if (!procedurePathHierarchy.containsKey(parentPath.toString())) {
+                    final ProceduresPath parent = new ProceduresPath(parentPath.toString());
+                    procedurePathHierarchy.put(parentPath.toString(), parent);
+                }
+            }
+            final ProceduresPath parent = procedurePathHierarchy.get(parentPath.toString());
+            if (!parent.procedurePaths.contains(parts[parts.length - 1]))
+                parent.procedurePaths.add(parts[parts.length - 1]);
+        }
+        for (final ProceduresPath path : procedurePathHierarchy.values()) {
+            if ("".equals(path.path))
+                writeLine(writer, "type Procedures implements ProcedureContainer {");
+            else
+                writeLine(writer, "type " + path.typeName + " implements ProcedureContainer {");
+            writeLine(writer, "  _id: ID!");
+            for (int i = 0; i < path.childPaths.size(); i++) {
+                final String childTypeName = procedurePathHierarchy.get(path.getFullChildPath(i)).typeName;
+                writeLine(writer, "  _" + path.childPaths.get(i) + ": " + childTypeName + "!");
+            }
+            for (int i = 0; i < path.procedurePaths.size(); i++) {
+                final String fullProcedurePath = path.getFullProcedurePath(i);
+                final Registry.ProcedureDefinition definition = Registry.getInstance().getProcedure(fullProcedurePath);
+                final StringBuilder arguments = new StringBuilder();
+                for (int j = 0; j < definition.argumentNames.length; j++) {
+                    if (j == 0)
+                        arguments.append('(');
+                    if (j > 0)
+                        arguments.append(", ");
+                    arguments.append(definition.argumentNames[j]).append(": ");
+                    switch (definition.argumentTypes[j]) {
+                        case Bool:
+                            arguments.append("Boolean");
+                            break;
+                        case Node:
+                        case Edge:
+                            arguments.append("ID");
+                            break;
+                        case String:
+                            arguments.append("String");
+                            break;
+                        case Int:
+                            arguments.append("Int");
+                            break;
+                        case Float:
+                            arguments.append("Float");
+                            break;
+                        case Object:
+                            arguments.append("JSON");
+                            break;
+                    }
+                    arguments.append("!");
+                    if (j == definition.argumentNames.length - 1)
+                        arguments.append(')');
+                }
+                writeLine(writer, "  " + path.procedurePaths.get(i) + arguments + ": JSON! @Procedure(path: \"" +
+                                  fullProcedurePath + "\")");
+            }
+            writeLine(writer, "}");
+        }
+        writer.newLine();
+    }
+
     private void writeNodeType(final BufferedWriter writer, final GraphSchema schema,
                                final GraphSchema.NodeType type) throws IOException {
         final String directive = type.label.equals(type.fixedLabel()) ? "" :
@@ -169,5 +265,28 @@ public final class GraphQLSchemaWriter extends SchemaWriter {
         writeLine(writer, "  _from: Node!");
         writeLine(writer, "  _to: Node!");
         writeLine(writer, "}");
+    }
+
+    private static class ProceduresPath {
+        public final String path;
+        public final String typeName;
+        public final List<String> childPaths = new ArrayList<>();
+        public final List<String> procedurePaths = new ArrayList<>();
+
+        ProceduresPath(final String path) {
+            this.path = path;
+            final StringBuilder typeName = new StringBuilder();
+            for (final String part : StringUtils.split(path, '.'))
+                typeName.append(TextUtils.toUpperCamelCase(part));
+            this.typeName = typeName.toString();
+        }
+
+        public String getFullChildPath(final int i) {
+            return (path.length() > 0 ? path + '.' : "") + childPaths.get(i);
+        }
+
+        public String getFullProcedurePath(final int i) {
+            return (path.length() > 0 ? path + '.' : "") + procedurePaths.get(i);
+        }
     }
 }
