@@ -3,6 +3,7 @@ package de.unibi.agbi.biodwh2.graphql.server;
 import de.unibi.agbi.biodwh2.core.io.mvstore.MVStoreModel;
 import de.unibi.agbi.biodwh2.core.model.graph.Edge;
 import de.unibi.agbi.biodwh2.core.model.graph.Graph;
+import de.unibi.agbi.biodwh2.core.model.graph.GraphView;
 import de.unibi.agbi.biodwh2.core.model.graph.Node;
 import de.unibi.agbi.biodwh2.graphql.schema.GraphSchema;
 import de.unibi.agbi.biodwh2.procedures.Registry;
@@ -14,19 +15,18 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.math.BigInteger;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 
 final class GraphDataFetcher implements DataFetcher<Object> {
     private static final Logger LOGGER = LoggerFactory.getLogger(GraphDataFetcher.class);
 
     private final Graph graph;
+    private final Map<String, GraphView> views;
 
     public GraphDataFetcher(final Graph graph) {
         this.graph = graph;
+        views = new HashMap<>();
     }
 
     @Override
@@ -41,26 +41,48 @@ final class GraphDataFetcher implements DataFetcher<Object> {
     private Object getObject(final DataFetchingEnvironment environment) {
         final GraphQLSchema schema = environment.getGraphQLSchema();
         final Field field = environment.getMergedField().getSingleField();
-        final GraphQLImplementingType implementingType = (GraphQLImplementingType) unwrapType(
-                environment.getFieldType());
-        final Map<String, Comparable<?>> variables = new HashMap<>();
+        final Map<String, Object> variables = new HashMap<>();
         for (final VariableDefinition definition : environment.getOperationDefinition().getVariableDefinitions()) {
-            Comparable<?> value;
+            Object value;
             if (environment.getVariables().containsKey(definition.getName()))
-                value = (Comparable<?>) environment.getVariables().get(definition.getName());
+                value = environment.getVariables().get(definition.getName());
             else
                 value = convertGraphQLValue(null, definition.getDefaultValue(), variables);
             variables.put(definition.getName(), value);
         }
+        if (environment.getOperationDefinition().getOperation() == OperationDefinition.Operation.MUTATION)
+            return executeMutation(field, variables);
+        final GraphQLImplementingType implementingType = (GraphQLImplementingType) unwrapType(
+                environment.getFieldType());
         return getObject(schema, implementingType, field, null, null, variables);
+    }
+
+    private Object executeMutation(final Field field, final Map<String, Object> variables) {
+        final Map<String, Object> argumentsMap = convertArguments(field.getArguments(), variables);
+        if ("createGraphView".equals(field.getName())) {
+            final String[] nodeLabels = Arrays.stream(((Object[]) argumentsMap.get("nodeLabels"))).map(
+                    (x) -> (String) x).toArray(String[]::new);
+            final String[] edgeLabels = Arrays.stream(((Object[]) argumentsMap.get("edgeLabels"))).map(
+                    (x) -> (String) x).toArray(String[]::new);
+            final GraphView view = new GraphView(graph, nodeLabels, edgeLabels);
+            final String name = ((String) argumentsMap.get("name")) + '-' + java.util.UUID.randomUUID();
+            views.put(name, view);
+            return name;
+        } else if ("deleteGraphView".equals(field.getName())) {
+            final String id = (String) argumentsMap.get("id");
+            views.remove(id);
+            return id;
+        }
+        return null;
     }
 
     private Object getObject(final GraphQLSchema schema, final GraphQLImplementingType type, final Field field,
                              final String filterKey, final Comparable<?> filterValue,
-                             final Map<String, Comparable<?>> variables) {
+                             final Map<String, Object> variables) {
         final List<Directive> directives = field.getDirectives();
         final SelectionSet selectionSet = field.getSelectionSet();
-        final Map<String, Comparable<?>> argumentsMap = convertArgumentsForGraph(field.getArguments(), variables);
+        final Map<String, Comparable<?>> argumentsMap = convertArgumentsForGraph(
+                convertArguments(field.getArguments(), variables));
         if (filterKey != null && filterValue != null)
             argumentsMap.put(filterKey, filterValue);
         if (typeHasInterface(type, "Node")) {
@@ -99,8 +121,8 @@ final class GraphDataFetcher implements DataFetcher<Object> {
         return null;
     }
 
-    private List<Object> applyLimitDirective(final Map<String, Comparable<?>> variables,
-                                             final List<Directive> directives, List<Object> values) {
+    private List<Object> applyLimitDirective(final Map<String, Object> variables, final List<Directive> directives,
+                                             List<Object> values) {
         for (final Directive directive : directives) {
             if ("Limit".equals(directive.getName())) {
                 final Argument skipArg = directive.getArgument("skip");
@@ -115,9 +137,8 @@ final class GraphDataFetcher implements DataFetcher<Object> {
         return values;
     }
 
-    private Map<String, Comparable<?>> convertArgumentsForGraph(final List<Argument> arguments,
-                                                                final Map<String, Comparable<?>> variables) {
-        final Map<String, Comparable<?>> result = new HashMap<>();
+    private Map<String, Object> convertArguments(final List<Argument> arguments, final Map<String, Object> variables) {
+        final Map<String, Object> result = new HashMap<>();
         for (final Argument argument : arguments) {
             final String key = translatePropertyKey(argument.getName());
             result.put(key, convertGraphQLValue(key, argument.getValue(), variables));
@@ -125,8 +146,7 @@ final class GraphDataFetcher implements DataFetcher<Object> {
         return result;
     }
 
-    private Comparable<?> convertGraphQLValue(final String key, final Value<?> value,
-                                              final Map<String, Comparable<?>> variables) {
+    private Object convertGraphQLValue(final String key, final Value<?> value, final Map<String, Object> variables) {
         if (value == null)
             return null;
         if (value instanceof StringValue)
@@ -144,7 +164,7 @@ final class GraphDataFetcher implements DataFetcher<Object> {
             return integer.intValue();
         }
         if (value instanceof VariableReference) {
-            final Comparable<?> variableValue = variables.get(((VariableReference) value).getName());
+            final Object variableValue = variables.get(((VariableReference) value).getName());
             if (MVStoreModel.ID_FIELD.equals(key)) {
                 if (variableValue instanceof Integer)
                     return (long) (Integer) variableValue;
@@ -153,9 +173,24 @@ final class GraphDataFetcher implements DataFetcher<Object> {
             }
             return variableValue;
         }
+        if (value instanceof ArrayValue) {
+            //noinspection rawtypes
+            final List<Value> values = ((ArrayValue) value).getValues();
+            final Object[] result = new Object[values.size()];
+            for (int i = 0; i < result.length; i++)
+                result[i] = convertGraphQLValue(key, values.get(i), variables);
+            return result;
+        }
         if (LOGGER.isErrorEnabled())
             LOGGER.error("Failed to convert value '" + value + "' to graph argument");
         return null;
+    }
+
+    private Map<String, Comparable<?>> convertArgumentsForGraph(final Map<String, Object> arguments) {
+        final Map<String, Comparable<?>> result = new HashMap<>();
+        for (final String key : arguments.keySet())
+            result.put(key, (Comparable<?>) arguments.get(key));
+        return result;
     }
 
     private String translatePropertyKey(final String key) {
@@ -180,7 +215,7 @@ final class GraphDataFetcher implements DataFetcher<Object> {
     }
 
     private Map<String, Object> selectResults(final GraphQLSchema schema, final SelectionSet selectionSet,
-                                              final MVStoreModel model, final Map<String, Comparable<?>> variables) {
+                                              final MVStoreModel model, final Map<String, Object> variables) {
         if (model == null)
             return null;
         final Map<String, Object> result = new HashMap<>();
@@ -199,7 +234,7 @@ final class GraphDataFetcher implements DataFetcher<Object> {
     }
 
     private void selectResult(final GraphQLSchema schema, final Selection<?> selection, final MVStoreModel model,
-                              final Map<String, Object> result, final Map<String, Comparable<?>> variables) {
+                              final Map<String, Object> result, final Map<String, Object> variables) {
         if (selection instanceof Field)
             selectFieldResult(schema, (Field) selection, model, result, variables);
         else if (selection instanceof InlineFragment)
@@ -209,7 +244,7 @@ final class GraphDataFetcher implements DataFetcher<Object> {
     }
 
     private void selectFieldResult(final GraphQLSchema schema, final Field field, final MVStoreModel model,
-                                   final Map<String, Object> result, final Map<String, Comparable<?>> variables) {
+                                   final Map<String, Object> result, final Map<String, Object> variables) {
         if ("__typename".equals(field.getName()))
             result.put(field.getResultKey(), getFixedLabel(model));
         else {
@@ -242,7 +277,7 @@ final class GraphDataFetcher implements DataFetcher<Object> {
 
     private void selectInlineFragmentResult(final GraphQLSchema schema, final InlineFragment fragment,
                                             final MVStoreModel model, final Map<String, Object> result,
-                                            final Map<String, Comparable<?>> variables) {
+                                            final Map<String, Object> variables) {
         if (fragment.getTypeCondition().getName().equals(getFixedLabel(model))) {
             final Map<String, Object> fragmentResults = selectResults(schema, fragment.getSelectionSet(), model,
                                                                       variables);
@@ -259,8 +294,7 @@ final class GraphDataFetcher implements DataFetcher<Object> {
     }
 
     private Object selectProcedureResults(final GraphQLSchema schema, final SelectionSet selectionSet,
-                                          final GraphQLImplementingType type,
-                                          final Map<String, Comparable<?>> variables) {
+                                          final GraphQLImplementingType type, final Map<String, Object> variables) {
         final Map<String, Object> result = new HashMap<>();
         for (final Selection<?> selection : selectionSet.getSelections()) {
             if (selection instanceof Field) {
@@ -293,7 +327,7 @@ final class GraphDataFetcher implements DataFetcher<Object> {
 
     private Object selectProcedureCallResults(final GraphQLSchema schema, final Field selectionField,
                                               final GraphQLFieldDefinition definition,
-                                              final Map<String, Comparable<?>> variables) {
+                                              final Map<String, Object> variables) {
         final GraphQLDirective directive = definition.getDirectivesByName().get("Procedure");
         if (directive != null) {
             final String path = directive.getArgument("path").toAppliedArgument().getValue();
@@ -315,13 +349,12 @@ final class GraphDataFetcher implements DataFetcher<Object> {
         return null;
     }
 
-    private Object[] convertArgumentsForProcedure(final List<Argument> arguments,
-                                                  final Map<String, Comparable<?>> variables,
+    private Object[] convertArgumentsForProcedure(final List<Argument> arguments, final Map<String, Object> variables,
                                                   final Registry.ProcedureDefinition procedure) {
         final Object[] result = new Object[arguments.size()];
         for (int i = 0; i < result.length; i++) {
-            final Comparable<?> value = convertGraphQLValue(arguments.get(i).getName(), arguments.get(i).getValue(),
-                                                            variables);
+            final Object value = convertGraphQLValue(arguments.get(i).getName(), arguments.get(i).getValue(),
+                                                     variables);
             result[i] = value;
             switch (procedure.argumentTypes[i]) {
                 case Node:

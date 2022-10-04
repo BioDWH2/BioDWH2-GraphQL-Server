@@ -40,6 +40,7 @@ public final class GraphQLSchemaWriter extends SchemaWriter {
         writeDirectives(writer);
         writeInterfaces(writer);
         writeMainSchema(writer);
+        writeMutationType(writer);
         writeQueryType(writer);
         writeProcedures(writer);
         writeLine(writer, "# Node type definitions");
@@ -95,9 +96,20 @@ public final class GraphQLSchemaWriter extends SchemaWriter {
     }
 
     private void writeMainSchema(final BufferedWriter writer) throws IOException {
+        writeLine(writer, "# Schema");
         writeLine(writer, "schema {");
         writeLine(writer, "  query: QueryType");
+        writeLine(writer, "  mutation: MutationType");
         writeLine(writer, "}");
+        writer.newLine();
+    }
+
+    private void writeMutationType(final BufferedWriter writer) throws IOException {
+        writeLine(writer, "type MutationType {");
+        writeLine(writer, "  createGraphView(name: String!, nodeLabels: [String!]!, edgeLabels: [String!]!): ID!");
+        writeLine(writer, "  deleteGraphView(id: ID!): ID!");
+        writeLine(writer, "}");
+        writer.newLine();
     }
 
     private void writeQueryType(final BufferedWriter writer) throws IOException {
