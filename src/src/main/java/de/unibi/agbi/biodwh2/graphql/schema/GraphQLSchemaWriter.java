@@ -201,12 +201,10 @@ public final class GraphQLSchemaWriter extends SchemaWriter {
                 final String fullProcedurePath = path.getFullProcedurePath(i);
                 final Registry.ProcedureDefinition definition = Registry.getInstance().getProcedure(fullProcedurePath);
                 final StringBuilder arguments = new StringBuilder();
+                arguments.append('(');
+                arguments.append("graphViewId: ID");
                 for (int j = 0; j < definition.argumentNames.length; j++) {
-                    if (j == 0)
-                        arguments.append('(');
-                    if (j > 0)
-                        arguments.append(", ");
-                    arguments.append(definition.argumentNames[j]).append(": ");
+                    arguments.append(", ").append(definition.argumentNames[j]).append(": ");
                     switch (definition.argumentSimpleTypes[j]) {
                         case Bool:
                             arguments.append("Boolean");
@@ -233,9 +231,8 @@ public final class GraphQLSchemaWriter extends SchemaWriter {
                             break;
                     }
                     arguments.append("!");
-                    if (j == definition.argumentNames.length - 1)
-                        arguments.append(')');
                 }
+                arguments.append(')');
                 writeLine(writer, "  " + path.procedurePaths.get(i) + arguments + ": JSON! @Procedure(path: \"" +
                                   fullProcedurePath + "\")");
             }

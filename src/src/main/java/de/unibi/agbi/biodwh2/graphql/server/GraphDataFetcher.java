@@ -1,15 +1,14 @@
 package de.unibi.agbi.biodwh2.graphql.server;
 
 import de.unibi.agbi.biodwh2.core.io.mvstore.MVStoreModel;
-import de.unibi.agbi.biodwh2.core.model.graph.Edge;
-import de.unibi.agbi.biodwh2.core.model.graph.Graph;
-import de.unibi.agbi.biodwh2.core.model.graph.GraphView;
 import de.unibi.agbi.biodwh2.core.model.graph.Node;
+import de.unibi.agbi.biodwh2.core.model.graph.*;
 import de.unibi.agbi.biodwh2.graphql.schema.GraphSchema;
 import de.unibi.agbi.biodwh2.procedures.Registry;
 import de.unibi.agbi.biodwh2.procedures.ResultSet;
 import graphql.language.*;
 import graphql.schema.*;
+import org.apache.commons.lang3.ArrayUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -334,9 +333,16 @@ final class GraphDataFetcher implements DataFetcher<Object> {
         if (directive != null) {
             final String path = directive.getArgument("path").toAppliedArgument().getValue();
             final Registry.ProcedureDefinition procedure = Registry.getInstance().getProcedure(path);
-            final Object[] parameters = convertArgumentsForProcedure(selectionField.getArguments(), variables,
-                                                                     procedure);
-            final ResultSet results = Registry.getInstance().callProcedure(path, graph, parameters);
+            final Map<String, Object> argumentsMap = getArgumentsMapForProcedure(selectionField.getArguments(),
+                                                                                 variables, procedure);
+            final Object[] parameters = convertArgumentsMapToProcedureArguments(procedure, argumentsMap);
+            BaseGraph usedGraph = graph;
+            if (argumentsMap.containsKey("graphViewId")) {
+                final BaseGraph view = views.get((String) argumentsMap.get("graphViewId"));
+                if (view != null)
+                    usedGraph = view;
+            }
+            final ResultSet results = Registry.getInstance().callProcedure(path, usedGraph, parameters);
             final Map<String, Object> result = new HashMap<>();
             result.put("columns", results.getColumns());
             final Object[][] rows = new Object[results.getRowCount()][];
@@ -351,39 +357,56 @@ final class GraphDataFetcher implements DataFetcher<Object> {
         return null;
     }
 
-    private Object[] convertArgumentsForProcedure(final List<Argument> arguments, final Map<String, Object> variables,
-                                                  final Registry.ProcedureDefinition procedure) {
-        final Object[] result = new Object[arguments.size()];
-        for (int i = 0; i < result.length; i++) {
-            final Object value = convertGraphQLValue(arguments.get(i).getName(), arguments.get(i).getValue(),
-                                                     variables);
-            result[i] = value;
-            final Class<?> type = procedure.argumentTypes[i];
-            switch (procedure.argumentSimpleTypes[i]) {
-                case Node:
-                    result[i] = graph.getNode((long) result[i]);
-                    break;
-                case Edge:
-                    result[i] = graph.getEdgeLabel((long) result[i]);
-                    break;
-                case Enum:
-                    result[i] = null;
-                    for (final Object constant : type.getEnumConstants()) {
-                        if (value.toString().equals(constant.toString())) {
-                            result[i] = constant;
-                            break;
+    private Map<String, Object> getArgumentsMapForProcedure(final List<Argument> arguments,
+                                                            final Map<String, Object> variables,
+                                                            final Registry.ProcedureDefinition procedure) {
+        final Map<String, Object> result = new HashMap<>();
+        for (int i = 0; i < arguments.size(); i++) {
+            final String name = arguments.get(i).getName();
+            final Object value = convertGraphQLValue(name, arguments.get(i).getValue(), variables);
+            final int definitionIndex = ArrayUtils.indexOf(procedure.argumentNames, name);
+            if (definitionIndex == -1) {
+                result.put(name, value);
+            } else {
+                final Class<?> type = procedure.argumentTypes[i];
+                switch (procedure.argumentSimpleTypes[i]) {
+                    case Node:
+                        result.put(name, graph.getNode((long) value));
+                        break;
+                    case Edge:
+                        result.put(name, graph.getEdgeLabel((long) value));
+                        break;
+                    case Enum:
+                        for (final Object constant : type.getEnumConstants()) {
+                            if (value.toString().equals(constant.toString())) {
+                                result.put(name, constant);
+                                break;
+                            }
                         }
-                    }
-                    break;
-                case Object:
-                    if (type.isArray()) {
-                        if (type.getComponentType() == String.class) {
-                            result[i] = Arrays.stream((Object[]) value).map(Object::toString).toArray(String[]::new);
+                        break;
+                    case Object:
+                        if (type.isArray() && type.getComponentType() == String.class) {
+                            result.put(name, Arrays.stream((Object[]) value).map(Object::toString)
+                                                   .toArray(String[]::new));
+                        } else {
+                            result.put(name, value);
                         }
-                    }
-                    break;
+                        break;
+                    default:
+                        result.put(name, value);
+                        break;
+                }
             }
         }
+        return result;
+    }
+
+    private Object[] convertArgumentsMapToProcedureArguments(final Registry.ProcedureDefinition procedure,
+                                                             final Map<String, Object> argumentsMap) {
+        // As the arguments from graphQL may be in any order, resolve the arguments in order of procedure definition
+        final Object[] result = new Object[procedure.argumentNames.length];
+        for (int i = 0; i < result.length; i++)
+            result[i] = argumentsMap.get(procedure.argumentNames[i]);
         return result;
     }
 }
