@@ -358,6 +358,7 @@ final class GraphDataFetcher implements DataFetcher<Object> {
             final Object value = convertGraphQLValue(arguments.get(i).getName(), arguments.get(i).getValue(),
                                                      variables);
             result[i] = value;
+            final Class<?> type = procedure.argumentTypes[i];
             switch (procedure.argumentSimpleTypes[i]) {
                 case Node:
                     result[i] = graph.getNode((long) result[i]);
@@ -367,10 +368,17 @@ final class GraphDataFetcher implements DataFetcher<Object> {
                     break;
                 case Enum:
                     result[i] = null;
-                    for (final Object constant : procedure.argumentTypes[i].getEnumConstants()) {
+                    for (final Object constant : type.getEnumConstants()) {
                         if (value.toString().equals(constant.toString())) {
                             result[i] = constant;
                             break;
+                        }
+                    }
+                    break;
+                case Object:
+                    if (type.isArray()) {
+                        if (type.getComponentType() == String.class) {
+                            result[i] = Arrays.stream((Object[]) value).map(Object::toString).toArray(String[]::new);
                         }
                     }
                     break;
