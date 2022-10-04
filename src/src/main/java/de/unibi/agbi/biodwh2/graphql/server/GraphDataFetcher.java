@@ -173,6 +173,8 @@ final class GraphDataFetcher implements DataFetcher<Object> {
             }
             return variableValue;
         }
+        if (value instanceof EnumValue)
+            return ((EnumValue) value).getName();
         if (value instanceof ArrayValue) {
             //noinspection rawtypes
             final List<Value> values = ((ArrayValue) value).getValues();
@@ -356,12 +358,21 @@ final class GraphDataFetcher implements DataFetcher<Object> {
             final Object value = convertGraphQLValue(arguments.get(i).getName(), arguments.get(i).getValue(),
                                                      variables);
             result[i] = value;
-            switch (procedure.argumentTypes[i]) {
+            switch (procedure.argumentSimpleTypes[i]) {
                 case Node:
                     result[i] = graph.getNode((long) result[i]);
                     break;
                 case Edge:
                     result[i] = graph.getEdgeLabel((long) result[i]);
+                    break;
+                case Enum:
+                    result[i] = null;
+                    for (final Object constant : procedure.argumentTypes[i].getEnumConstants()) {
+                        if (value.toString().equals(constant.toString())) {
+                            result[i] = constant;
+                            break;
+                        }
+                    }
                     break;
             }
         }

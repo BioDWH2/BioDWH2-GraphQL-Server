@@ -12,10 +12,7 @@ import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 
 public final class GraphQLSchemaWriter extends SchemaWriter {
@@ -168,12 +165,7 @@ public final class GraphQLSchemaWriter extends SchemaWriter {
     }
 
     private void writeProcedures(final BufferedWriter writer) throws IOException {
-        writeLine(writer, "enum EdgeDirection {");
-        writeLine(writer, "  ANY");
-        writeLine(writer, "  FORWARD");
-        writeLine(writer, "  BACKWARD");
-        writeLine(writer, "}");
-        writer.newLine();
+        final Set<Class<?>> enumTypes = new HashSet<>();
         final Registry.ProcedureDefinition[] definitions = Registry.getInstance().getProcedures();
         final Map<String, ProceduresPath> procedurePathHierarchy = new HashMap<>();
         procedurePathHierarchy.put("", new ProceduresPath(""));
@@ -215,7 +207,7 @@ public final class GraphQLSchemaWriter extends SchemaWriter {
                     if (j > 0)
                         arguments.append(", ");
                     arguments.append(definition.argumentNames[j]).append(": ");
-                    switch (definition.argumentTypes[j]) {
+                    switch (definition.argumentSimpleTypes[j]) {
                         case Bool:
                             arguments.append("Boolean");
                             break;
@@ -232,7 +224,11 @@ public final class GraphQLSchemaWriter extends SchemaWriter {
                         case Float:
                             arguments.append("Float");
                             break;
-                        case Object:
+                        case Enum:
+                            arguments.append(definition.argumentTypes[j].getSimpleName());
+                            enumTypes.add(definition.argumentTypes[j]);
+                            break;
+                        default:
                             arguments.append("JSON");
                             break;
                     }
@@ -246,6 +242,14 @@ public final class GraphQLSchemaWriter extends SchemaWriter {
             writeLine(writer, "}");
         }
         writer.newLine();
+        for (final Class<?> enumType : enumTypes) {
+            writeLine(writer, "enum " + enumType.getSimpleName() + " {");
+            for (final Object constant : enumType.getEnumConstants()) {
+                writeLine(writer, "  " + constant);
+            }
+            writeLine(writer, "}");
+            writer.newLine();
+        }
     }
 
     private void writeNodeType(final BufferedWriter writer, final GraphSchema schema,
