@@ -368,8 +368,8 @@ final class GraphDataFetcher implements DataFetcher<Object> {
             if (definitionIndex == -1) {
                 result.put(name, value);
             } else {
-                final Class<?> type = procedure.argumentTypes[i];
-                switch (procedure.argumentSimpleTypes[i]) {
+                final Class<?> type = procedure.argumentTypes[definitionIndex];
+                switch (procedure.argumentSimpleTypes[definitionIndex]) {
                     case Node:
                         result.put(name, graph.getNode((long) value));
                         break;
