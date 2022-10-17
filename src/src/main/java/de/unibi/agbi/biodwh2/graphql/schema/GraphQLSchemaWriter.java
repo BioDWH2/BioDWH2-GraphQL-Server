@@ -104,6 +104,7 @@ public final class GraphQLSchemaWriter extends SchemaWriter {
     private void writeMutationType(final BufferedWriter writer) throws IOException {
         writeLine(writer, "type MutationType {");
         writeLine(writer, "  createGraphView(name: String!, nodeLabels: [String!]!, edgeLabels: [String!]!): ID!");
+        writeLine(writer, "  createGraphViewIds(name: String!, nodeIds: [ID!]!, edgeIds: [ID!]!): ID!");
         writeLine(writer, "  deleteGraphView(id: ID!): ID!");
         writeLine(writer, "}");
         writer.newLine();
@@ -262,6 +263,8 @@ public final class GraphQLSchemaWriter extends SchemaWriter {
                           "  " + edgeType.fixedLabel() + '(' + arguments + "): [" + edgeType.fixedLabel() + "!]!");
             }
         writeLine(writer, "  _edges(_label: String): [Edge!]!");
+        writeLine(writer, "  _edgesIn(_label: String): [Edge!]!");
+        writeLine(writer, "  _edgesOut(_label: String): [Edge!]!");
         writeLine(writer, "}");
     }
 

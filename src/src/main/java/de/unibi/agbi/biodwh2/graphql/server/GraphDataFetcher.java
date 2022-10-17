@@ -4,6 +4,7 @@ import de.unibi.agbi.biodwh2.core.io.mvstore.MVStoreModel;
 import de.unibi.agbi.biodwh2.core.model.graph.Node;
 import de.unibi.agbi.biodwh2.core.model.graph.*;
 import de.unibi.agbi.biodwh2.graphql.schema.GraphSchema;
+import de.unibi.agbi.biodwh2.graphql.server.model.GraphViewIds;
 import de.unibi.agbi.biodwh2.procedures.Registry;
 import de.unibi.agbi.biodwh2.procedures.ResultSet;
 import graphql.language.*;
@@ -63,6 +64,15 @@ final class GraphDataFetcher implements DataFetcher<Object> {
             final String[] edgeLabels = Arrays.stream(((Object[]) argumentsMap.get("edgeLabels"))).map(
                     (x) -> (String) x).toArray(String[]::new);
             final GraphView view = new GraphView(graph, nodeLabels, edgeLabels);
+            final String name = ((String) argumentsMap.get("name")) + '-' + java.util.UUID.randomUUID();
+            views.put(name, view);
+            return name;
+        } else if ("createGraphViewIds".equals(field.getName())) {
+            final Long[] nodeIds = Arrays.stream(((Object[]) argumentsMap.get("nodeIds"))).map((x) -> (Long) x).toArray(
+                    Long[]::new);
+            final Long[] edgeIds = Arrays.stream(((Object[]) argumentsMap.get("edgeIds"))).map((x) -> (Long) x).toArray(
+                    Long[]::new);
+            final GraphViewIds view = new GraphViewIds(graph, nodeIds, edgeIds);
             final String name = ((String) argumentsMap.get("name")) + '-' + java.util.UUID.randomUUID();
             views.put(name, view);
             return name;
@@ -256,9 +266,31 @@ final class GraphDataFetcher implements DataFetcher<Object> {
             else if (fieldType instanceof GraphQLImplementingType) {
                 final GraphQLImplementingType implementingType = (GraphQLImplementingType) fieldType;
                 if (model instanceof Node) {
-                    result.put(field.getResultKey(),
-                               getObject(schema, implementingType, field, Edge.FROM_ID_FIELD, model.getId(),
-                                         variables));
+                    if ("_edges".equals(field.getName())) {
+                        //noinspection unchecked
+                        final List<Object> inEdges = (List<Object>) getObject(schema, implementingType, field,
+                                                                              Edge.TO_ID_FIELD, model.getId(),
+                                                                              variables);
+                        //noinspection unchecked
+                        final List<Object> outEdges = (List<Object>) getObject(schema, implementingType, field,
+                                                                               Edge.FROM_ID_FIELD, model.getId(),
+                                                                               variables);
+                        //noinspection ConstantConditions
+                        inEdges.addAll(outEdges);
+                        result.put(field.getResultKey(), inEdges);
+                    } else if ("_edgesIn".equals(field.getName())) {
+                        result.put(field.getResultKey(),
+                                   getObject(schema, implementingType, field, Edge.TO_ID_FIELD, model.getId(),
+                                             variables));
+                    } else if ("_edgesOut".equals(field.getName())) {
+                        result.put(field.getResultKey(),
+                                   getObject(schema, implementingType, field, Edge.FROM_ID_FIELD, model.getId(),
+                                             variables));
+                    } else {
+                        result.put(field.getResultKey(),
+                                   getObject(schema, implementingType, field, Edge.FROM_ID_FIELD, model.getId(),
+                                             variables));
+                    }
                 } else if (model instanceof Edge) {
                     final Edge edge = (Edge) model;
                     final long targetId = "_to".equals(field.getName()) ? edge.getToId() : edge.getFromId();
