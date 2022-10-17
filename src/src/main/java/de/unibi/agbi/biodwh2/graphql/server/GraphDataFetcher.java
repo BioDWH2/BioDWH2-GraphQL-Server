@@ -21,11 +21,10 @@ final class GraphDataFetcher implements DataFetcher<Object> {
     private static final Logger LOGGER = LoggerFactory.getLogger(GraphDataFetcher.class);
 
     private final Graph graph;
-    private final Map<String, GraphView> views;
+    private static final Map<String, BaseGraph> views = new HashMap<>();
 
     public GraphDataFetcher(final Graph graph) {
         this.graph = graph;
-        views = new HashMap<>();
     }
 
     @Override
