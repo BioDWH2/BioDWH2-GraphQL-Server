@@ -118,34 +118,24 @@ final class GraphDataFetcher implements DataFetcher<Object> {
         if (filterKey != null && filterValue != null)
             argumentsMap.put(filterKey, filterValue);
         if (typeHasInterface(type, "Node")) {
-            final List<Object> result = new ArrayList<>();
-            for (final Node node : graph.findNodes(getTypeNameOrGraphLabel(type), argumentsMap))
-                result.add(selectResults(schema, selectionSet, node, variables));
-            return applyLimitDirective(variables, directives, result);
+            return applyLimitDirective(schema, selectionSet, variables, directives,
+                                       graph.findNodes(getTypeNameOrGraphLabel(type), argumentsMap));
         } else if (typeHasInterface(type, "Edge")) {
-            final List<Object> result = new ArrayList<>();
-            for (final Edge edge : graph.findEdges(getTypeNameOrGraphLabel(type), argumentsMap))
-                result.add(selectResults(schema, selectionSet, edge, variables));
-            return applyLimitDirective(variables, directives, result);
+            return applyLimitDirective(schema, selectionSet, variables, directives,
+                                       graph.findEdges(getTypeNameOrGraphLabel(type), argumentsMap));
         } else if (type instanceof GraphQLInterfaceType) {
             if ("Node".equals(type.getName())) {
                 if (argumentsMap.size() == 1 && argumentsMap.containsKey(Node.ID_FIELD)) {
                     final long id = getLongProperty(argumentsMap, Node.ID_FIELD);
                     return selectResults(schema, selectionSet, graph.getNode(id), variables);
                 }
-                final List<Object> result = new ArrayList<>();
-                for (final Node node : graph.findNodes(argumentsMap))
-                    result.add(selectResults(schema, selectionSet, node, variables));
-                return applyLimitDirective(variables, directives, result);
+                return applyLimitDirective(schema, selectionSet, variables, directives, graph.findNodes(argumentsMap));
             } else if ("Edge".equals(type.getName())) {
                 if (argumentsMap.size() == 1 && argumentsMap.containsKey(Edge.ID_FIELD)) {
                     final long id = getLongProperty(argumentsMap, Edge.ID_FIELD);
                     return selectResults(schema, selectionSet, graph.getEdge(id), variables);
                 }
-                final List<Object> result = new ArrayList<>();
-                for (final Edge edge : graph.findEdges(argumentsMap))
-                    result.add(selectResults(schema, selectionSet, edge, variables));
-                return applyLimitDirective(variables, directives, result);
+                return applyLimitDirective(schema, selectionSet, variables, directives, graph.findEdges(argumentsMap));
             }
         } else if (typeHasInterface(type, "ProcedureContainer")) {
             return selectProcedureResults(schema, selectionSet, type, variables);
@@ -153,20 +143,36 @@ final class GraphDataFetcher implements DataFetcher<Object> {
         return null;
     }
 
-    private List<Object> applyLimitDirective(final Map<String, Object> variables, final List<Directive> directives,
-                                             List<Object> values) {
+    private <T extends MVStoreModel> List<Map<String, Object>> applyLimitDirective(final GraphQLSchema schema,
+                                                                                   final SelectionSet selectionSet,
+                                                                                   final Map<String, Object> variables,
+                                                                                   final List<Directive> directives,
+                                                                                   Iterable<T> values) {
         for (final Directive directive : directives) {
             if ("Limit".equals(directive.getName())) {
                 final Argument skipArg = directive.getArgument("skip");
                 final Argument countArg = directive.getArgument("count");
-                final int skip = skipArg != null ? (Integer) convertGraphQLValue("skip", skipArg.getValue(),
-                                                                                 variables) : 0;
-                final int count = countArg != null ? (Integer) convertGraphQLValue("count", countArg.getValue(),
-                                                                                   variables) : values.size();
-                return values.stream().skip(skip).limit(count).collect(Collectors.toList());
+                int skip = skipArg != null ? (Integer) convertGraphQLValue("skip", skipArg.getValue(), variables) : 0;
+                int count = countArg != null ? (Integer) convertGraphQLValue("count", countArg.getValue(), variables) :
+                            Integer.MAX_VALUE;
+                final List<Map<String, Object>> result = new ArrayList<>();
+                for (final T entry : values) {
+                    if (skip > 0) {
+                        skip--;
+                        continue;
+                    }
+                    if (count <= 0)
+                        break;
+                    count--;
+                    result.add(selectResults(schema, selectionSet, entry, variables));
+                }
+                return result;
             }
         }
-        return values;
+        final List<Map<String, Object>> result = new ArrayList<>();
+        for (final T entry : values)
+            result.add(selectResults(schema, selectionSet, entry, variables));
+        return result;
     }
 
     private Map<String, Object> convertArguments(final List<Argument> arguments, final Map<String, Object> variables) {
