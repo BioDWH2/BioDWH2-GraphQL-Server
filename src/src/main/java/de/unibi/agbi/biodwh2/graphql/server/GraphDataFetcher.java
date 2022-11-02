@@ -68,20 +68,44 @@ final class GraphDataFetcher implements DataFetcher<Object> {
             views.put(name, view);
             return name;
         } else if ("createGraphViewIds".equals(field.getName())) {
-            final Long[] nodeIds = Arrays.stream(((Object[]) argumentsMap.get("nodeIds"))).map((x) -> (Long) x).toArray(
-                    Long[]::new);
-            final Long[] edgeIds = Arrays.stream(((Object[]) argumentsMap.get("edgeIds"))).map((x) -> (Long) x).toArray(
-                    Long[]::new);
+            final Collection<Long> nodeIds = getIdsListFromArgument(argumentsMap, "nodeIds");
+            final Collection<Long> edgeIds = getIdsListFromArgument(argumentsMap, "edgeIds");
             final GraphViewIds view = new GraphViewIds(graph, nodeIds, edgeIds);
             final String name = ((String) argumentsMap.get("name")) + '-' + java.util.UUID.randomUUID();
             views.put(name, view);
             return name;
+        } else if ("modifyGraphViewIds".equals(field.getName())) {
+            final String id = (String) argumentsMap.get("id");
+            final BaseGraph view = views.get(id);
+            if (view instanceof GraphViewIds) {
+                final GraphViewIds viewIds = (GraphViewIds) view;
+                final Collection<Long> addNodeIds = getIdsListFromArgument(argumentsMap, "addNodeIds");
+                if (addNodeIds != null)
+                    viewIds.addNodeIds(addNodeIds);
+                final Collection<Long> addEdgeIds = getIdsListFromArgument(argumentsMap, "addEdgeIds");
+                if (addEdgeIds != null)
+                    viewIds.addEdgeIds(addEdgeIds);
+                final Collection<Long> removeNodeIds = getIdsListFromArgument(argumentsMap, "removeNodeIds");
+                if (removeNodeIds != null)
+                    viewIds.removeNodeIds(removeNodeIds);
+                final Collection<Long> removeEdgeIds = getIdsListFromArgument(argumentsMap, "removeEdgeIds");
+                if (removeEdgeIds != null)
+                    viewIds.removeEdgeIds(removeEdgeIds);
+                return true;
+            }
+            return false;
         } else if ("deleteGraphView".equals(field.getName())) {
             final String id = (String) argumentsMap.get("id");
             views.remove(id);
             return id;
         }
         return null;
+    }
+
+    private Collection<Long> getIdsListFromArgument(final Map<String, Object> argumentsMap, final String key) {
+        if (!argumentsMap.containsKey(key))
+            return null;
+        return Arrays.stream(((Object[]) argumentsMap.get(key))).map((x) -> (Long) x).collect(Collectors.toList());
     }
 
     private Object getObject(final GraphQLSchema schema, final GraphQLImplementingType type, final Field field,

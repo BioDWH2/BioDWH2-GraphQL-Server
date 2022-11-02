@@ -105,6 +105,8 @@ public final class GraphQLSchemaWriter extends SchemaWriter {
         writeLine(writer, "type MutationType {");
         writeLine(writer, "  createGraphView(name: String!, nodeLabels: [String!]!, edgeLabels: [String!]!): ID!");
         writeLine(writer, "  createGraphViewIds(name: String!, nodeIds: [ID!]!, edgeIds: [ID!]!): ID!");
+        writeLine(writer,
+                  "  modifyGraphViewIds(id: ID!, addNodeIds: [ID!], addEdgeIds: [ID!], removeNodeIds: [ID!], removeEdgeIds: [ID!]): Boolean!");
         writeLine(writer, "  deleteGraphView(id: ID!): ID!");
         writeLine(writer, "}");
         writer.newLine();

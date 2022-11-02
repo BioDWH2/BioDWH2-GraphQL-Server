@@ -4,10 +4,7 @@ import de.unibi.agbi.biodwh2.core.model.graph.BaseGraph;
 import de.unibi.agbi.biodwh2.core.model.graph.Edge;
 import de.unibi.agbi.biodwh2.core.model.graph.Node;
 
-import java.util.Arrays;
-import java.util.Iterator;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
@@ -20,6 +17,28 @@ public class GraphViewIds extends BaseGraph {
         this.graph = graph;
         this.nodeIds = Arrays.stream(nodeIds).collect(Collectors.toSet());
         this.edgeIds = Arrays.stream(edgeIds).collect(Collectors.toSet());
+    }
+
+    public GraphViewIds(final BaseGraph graph, final Collection<Long> nodeIds, final Collection<Long> edgeIds) {
+        this.graph = graph;
+        this.nodeIds = new HashSet<>(nodeIds);
+        this.edgeIds = new HashSet<>(edgeIds);
+    }
+
+    public void addNodeIds(final Collection<Long> ids) {
+        nodeIds.addAll(ids);
+    }
+
+    public void addEdgeIds(final Collection<Long> ids) {
+        edgeIds.addAll(ids);
+    }
+
+    public void removeNodeIds(final Collection<Long> ids) {
+        nodeIds.removeAll(ids);
+    }
+
+    public void removeEdgeIds(final Collection<Long> ids) {
+        edgeIds.removeAll(ids);
     }
 
     @Override
