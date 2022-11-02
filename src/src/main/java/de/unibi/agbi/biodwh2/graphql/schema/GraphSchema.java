@@ -10,7 +10,10 @@ import de.unibi.agbi.biodwh2.core.model.graph.Graph;
 import org.apache.commons.lang3.StringUtils;
 
 import java.lang.reflect.Field;
-import java.util.*;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentMap;
 
 public class GraphSchema {
@@ -23,7 +26,7 @@ public class GraphSchema {
         }
 
         public static String fixLabel(final String label) {
-            return StringUtils.replace(label, "-", "_");
+            return StringUtils.replace(StringUtils.replace(label, "-", "_"), ".", "_");
         }
     }
 
@@ -80,14 +83,19 @@ public class GraphSchema {
             f.setAccessible(true);
             final Field f2 = MVStoreNonUniqueTrieIndex.class.getDeclaredField("map");
             f2.setAccessible(true);
-            final ConcurrentMap<String, MVStoreCollection<Edge>> edgeRepositories = (ConcurrentMap<String, MVStoreCollection<Edge>>) f.get(graph);
+            final ConcurrentMap<String, MVStoreCollection<Edge>> edgeRepositories = (ConcurrentMap<String, MVStoreCollection<Edge>>) f.get(
+                    graph);
             for (final String label : graph.getEdgeLabels()) {
                 final EdgeType type = edgeTypes.get(label);
                 final MVStoreCollection<Edge> edgeCollection = edgeRepositories.get(label);
-                final MVStoreNonUniqueTrieIndex fromIndex = (MVStoreNonUniqueTrieIndex) edgeCollection.getIndex(Edge.FROM_ID_FIELD);
-                final MVStoreNonUniqueTrieIndex toIndex = (MVStoreNonUniqueTrieIndex) edgeCollection.getIndex(Edge.TO_ID_FIELD);
-                final MVMapWrapper<Comparable<?>, LongTrie> fromMap = (MVMapWrapper<Comparable<?>, LongTrie>) f2.get(fromIndex);
-                final MVMapWrapper<Comparable<?>, LongTrie> toMap = (MVMapWrapper<Comparable<?>, LongTrie>) f2.get(toIndex);
+                final MVStoreNonUniqueTrieIndex fromIndex = (MVStoreNonUniqueTrieIndex) edgeCollection.getIndex(
+                        Edge.FROM_ID_FIELD);
+                final MVStoreNonUniqueTrieIndex toIndex = (MVStoreNonUniqueTrieIndex) edgeCollection.getIndex(
+                        Edge.TO_ID_FIELD);
+                final MVMapWrapper<Comparable<?>, LongTrie> fromMap = (MVMapWrapper<Comparable<?>, LongTrie>) f2.get(
+                        fromIndex);
+                final MVMapWrapper<Comparable<?>, LongTrie> toMap = (MVMapWrapper<Comparable<?>, LongTrie>) f2.get(
+                        toIndex);
                 for (final Comparable<?> id : fromMap.keySet())
                     type.fromLabels.add(graph.getNodeLabel((Long) id));
                 for (final Comparable<?> id : toMap.keySet())
