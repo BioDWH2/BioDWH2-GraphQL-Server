@@ -270,7 +270,8 @@ public class GraphViewIds extends BaseGraph {
             nextEdge = null;
             while (parent.hasNext()) {
                 nextEdge = parent.next();
-                if (edgeIds.contains(nextEdge.getId())) {
+                if (edgeIds.contains(nextEdge.getId()) && nodeIds.contains(nextEdge.getFromId()) && nodeIds.contains(
+                        nextEdge.getToId())) {
                     break;
                 } else {
                     nextEdge = null;
