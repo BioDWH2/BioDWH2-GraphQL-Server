@@ -42,6 +42,16 @@ public class GraphViewIds extends BaseGraph {
     }
 
     @Override
+    public Iterable<Long> getNodeIds(final String label) {
+        return () -> new FilterIdsIterator(nodeIds, graph.getNodeIds(label).iterator());
+    }
+
+    @Override
+    public Iterable<Long> getEdgeIds(final String label) {
+        return () -> new FilterIdsIterator(edgeIds, graph.getEdgeIds(label).iterator());
+    }
+
+    @Override
     public Iterable<Node> getNodes() {
         return filterNodesIterable(graph.getNodes());
     }
@@ -227,6 +237,36 @@ public class GraphViewIds extends BaseGraph {
     @Override
     public Iterable<Edge> findEdges(final Map<String, Comparable<?>> properties) {
         return filterEdgesIterable(graph.findEdges(properties));
+    }
+
+    private class FilterIdsIterator implements Iterator<Long> {
+        private final Set<Long> ids;
+        private final Iterator<Long> parent;
+        private Long nextNodeId = null;
+
+        FilterIdsIterator(final Set<Long> ids, final Iterator<Long> parent) {
+            this.ids = ids;
+            this.parent = parent;
+        }
+
+        @Override
+        public boolean hasNext() {
+            nextNodeId = null;
+            while (parent.hasNext()) {
+                nextNodeId = parent.next();
+                if (ids.contains(nextNodeId)) {
+                    break;
+                } else {
+                    nextNodeId = null;
+                }
+            }
+            return nextNodeId != null;
+        }
+
+        @Override
+        public Long next() {
+            return nextNodeId;
+        }
     }
 
     private class FilterNodesIterator implements Iterator<Node> {

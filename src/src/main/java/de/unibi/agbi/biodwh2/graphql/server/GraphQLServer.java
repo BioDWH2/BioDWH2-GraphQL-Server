@@ -17,11 +17,12 @@ import graphql.schema.idl.SchemaGenerator;
 import graphql.schema.idl.SchemaParser;
 import graphql.schema.idl.TypeDefinitionRegistry;
 import io.javalin.Javalin;
-import io.javalin.core.JavalinConfig;
+import io.javalin.config.JavalinConfig;
 import io.javalin.http.Context;
+import io.javalin.plugin.bundled.CorsPluginConfig;
 import org.apache.commons.lang3.StringUtils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import picocli.CommandLine;
 
 import java.awt.*;
@@ -36,7 +37,7 @@ import java.util.Arrays;
 import java.util.stream.Collectors;
 
 public class GraphQLServer {
-    private static final Logger LOGGER = LoggerFactory.getLogger(GraphQLServer.class);
+    private static final Logger LOGGER = LogManager.getLogger(GraphQLServer.class);
     private static final String DATABASE_FILE_NAME = "mapped." + Graph.EXTENSION;
     private static final String SCHEMA_FILE_NAME = "mapped." + GraphQLSchemaWriter.EXTENSION;
 
@@ -123,8 +124,8 @@ public class GraphQLServer {
     }
 
     private void configureJavalin(final JavalinConfig config) {
-        config.defaultContentType = "application/json";
-        config.enableCorsForAllOrigins();
+        config.http.defaultContentType = "application/json";
+        config.plugins.enableCors(cors -> cors.add(CorsPluginConfig::anyHost));
         config.showJavalinBanner = false;
     }
 
@@ -155,7 +156,7 @@ public class GraphQLServer {
     }
 
     private static boolean isLineEmptyOrComment(final String l) {
-        return l.length() == 0 || l.trim().startsWith("#");
+        return l.isEmpty() || l.trim().startsWith("#");
     }
 
     private void openBrowser(final int port) {
